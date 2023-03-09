@@ -36,6 +36,23 @@ def is_prime(n: int) -> bool:
             return False
     return True
 
+"""
+
+Requirements:
+ - Create function filter_numbers that takes list of integers and returns list of even/odd/primes, depending on mode
+  argument:
+    > filter_numbers([1, 2, 3], ODD)
+    < [1, 3]
+    > filter_numbers([2, 3, 4, 5], EVEN)
+    < [2, 4]
+ - create and use constants ODD/EVEN/PRIME to check mode type, i.e. not 
+   if filter_type == 'odd', but 
+   if filter_type == ODD and so on.
+ - use builtin function `filter`
+ - create separate function is_prime in the global scope (out of filter_numbers function) to check a if a number
+ is prime, and call it from filter_numbers
+ - do not create is_prime to take a list and return a list. Istead, let it take an integer and return True/False
+"""
 
 def filter_numbers(nlist, mode):
     """
