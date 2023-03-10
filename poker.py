@@ -27,7 +27,17 @@
 # Можно свободно определять свои функции и т.п.
 # -----------------
 import itertools
-from collections import defaultdict
+
+# The constant to untie top-level ranks returned by hand_rank, by taking into account the `weight` of remaining cards
+# We have at maximum 8 slots to evaluate: in case of rank 2 case we have (rank) (pair of ranks) (5 cards))
+KICKER_MULTIPLIERS = [1e14, 1e12, 1e10, 1e8, 1e6, 1e4, 1e2, 1]
+
+# Deck references
+RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K']
+BLACK_SUITS = ['C', 'S']
+RED_SUITS = ['H', 'D']
+BLACK_DECK = {r + s for r in RANKS for s in BLACK_SUITS}
+RED_DECK = {r + s for r in RANKS for s in RED_SUITS}
 
 
 def hand_rank(hand):
@@ -92,97 +102,58 @@ def two_pair(ranks):
     return (kinds[0], kinds[1]) if kinds and len(kinds) == 2 else None
 
 
-def kicker_ranks(ranked_hand):
+def flatten(input_tuple: tuple) -> list:
+    """Convert tuples to a flat list. Input tuple may contain mix of integers, tuples and lists"""
+    output_list = []
+    for element in input_tuple:
+        if isinstance(element, int):
+            output_list.append(element)
+        elif isinstance(element, list) or isinstance(element, tuple):
+            output_list.extend(flatten(element))
+    return output_list
 
+
+def kicker_rank(ranked_hand):
+    """Takes raw ranks, as produced by `hand_rank` (with main rank and a bunch of tuples,
+    which are reflecting straights' and kinds' weights and kicker cards)
+    and return a simple rank for a hand: a single number, directly comparable between hands.
+    Main rank takes the highest register (multiplied by 1e14 from the constant), second number
+    multiplied by 1e12, and so on. If the raw rank is short (like in straight flush - (8, max(ranks)),
+    only first some multipliers are used, the rest are omitted"""
+    rank = flatten(ranked_hand)
+    return sum([rank * mult for rank, mult in zip(rank, KICKER_MULTIPLIERS)])
+
+
+def rank5from7(hand7):
+    """Creates combinatorial iterator of 5-card hand from 7-card hand and yields rank for each 5-card hand."""
+    iter_comb5 = itertools.combinations(hand7, 5)
+    for hand5 in iter_comb5:
+        hand5_rank = hand_rank(hand5)
+        yield hand5, kicker_rank(hand5_rank)
 
 
 def best_hand(hand):
     """Из "руки" в 7 карт возвращает лучшую "руку" в 5 карт """
-    d: dict = {}
-    it = itertools.combinations(hand, 5)
-    for hand5 in it:
-        d[hand5] = hand_rank(hand5)
-    max_rank = max([v[0] for k, v in d.items()])
-    d_max_rank = {k: v for k, v in d.items() if v[0] == max_rank}
-
-    d = {}
-    for k, rest in d_max_rank.items():
-        rests_list = []
-        for rest_component in rest[1:]:
-            if isinstance(rest_component, (list, tuple)):
-                rests_list.extend(rest_component)
-            else:
-                rests_list.append(rest_component)
-        d[k] = rests_list
-
-    # amount candidates of the same rank the len of rests returned by hand_rank is the same, so, take some one
-    rests_dim = len(next(iter(d.values())))
-
-    d_best_ranks: defaultdict = defaultdict(int)
-    for criterion in range(rests_dim):
-        for hand_candidate, rank_specific in d.items():
-            d_best_ranks[hand_candidate] += rank_specific[criterion]
-        max_value_unique = [None, 0, True]
-        for k, v in d_best_ranks.items():
-            if v > max_value_unique[1]:
-                max_value_unique = [k, v, True]
-            elif v == max_value_unique[1]:
-                max_value_unique[2] = False
-        if max_value_unique[2]:
-            return list(max_value_unique[0])  # either found best
-    return list(next(iter(d_best_ranks.keys())))  # either return an arbitrary hand out of candidates
+    hands_ranked: dict = {}
+    for hand5, rank in rank5from7(hand):
+        hands_ranked[hand5] = rank
+    return max(hands_ranked, key=hands_ranked.get)
 
 
 def best_wild_hand(hand):
     """best_hand но с джокерами"""
-    ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K']
-    black_suits = ['C', 'S']
-    red_suits = ['H', 'D']
-    black_deck = {r + s for r in ranks for s in black_suits}
-    red_deck = {r + s for r in ranks for s in red_suits}
-
     stem = set(hand) - {'?B', '?R'}
     options = [list(stem), ]
-    for joker, deck in [('?B', black_deck), ('?R', red_deck), ]:
+    for joker, deck in [('?B', BLACK_DECK), ('?R', RED_DECK), ]:
         if joker in hand:
             complement_deck = deck - stem
             options = [(*a, b) for a, b in itertools.product(options, complement_deck)]
 
-    d: dict = {}
+    hands_ranked: dict = {}
     for option in options:
-        it = itertools.combinations(option, 5)
-        for hand5 in it:
-            d[hand5] = hand_rank(hand5)
-
-    max_rank = max([v[0] for k, v in d.items()])
-    d_max_rank = {k: v for k, v in d.items() if v[0] == max_rank}
-
-    d = {}
-    for k, rest in d_max_rank.items():
-        rests_list = []
-        for rest_component in rest[1:]:
-            if isinstance(rest_component, (list, tuple)):
-                rests_list.extend(rest_component)
-            else:
-                rests_list.append(rest_component)
-        d[k] = rests_list
-
-    # amount candidates of the same rank the len of rests returned by hand_rank is the same, so, take some one
-    rests_dim = len(next(iter(d.values())))
-
-    d_best_ranks: defaultdict = defaultdict(int)
-    for criterion in range(rests_dim):
-        for hand_candidate, rank_specific in d.items():
-            d_best_ranks[hand_candidate] += rank_specific[criterion]
-        max_value_unique = [None, 0, True]
-        for k, v in d_best_ranks.items():
-            if v > max_value_unique[1]:
-                max_value_unique = [k, v, True]
-            elif v == max_value_unique[1]:
-                max_value_unique[2] = False
-        if max_value_unique[2]:
-            return list(max_value_unique[0])  # either found best
-    return list(next(iter(d_best_ranks.keys())))  # either return an arbitrary hand out of candidates
+        for hand5, rank in rank5from7(option):
+            hands_ranked[hand5] = rank
+    return max(hands_ranked, key=hands_ranked.get)
 
 
 def test_best_hand():
