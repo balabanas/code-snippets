@@ -64,16 +64,11 @@ class CharField(metaclass=FieldValidationMeta):
         type(self).validate_required_null(instance, self, value)
         ornone = " or None" if self.nullable else ''
         if not isinstance(value, str) and not value is None:
-            raise TypeError(f"Field {self._get_name(instance)} expects string{ornone}. Got: {value}")
+            raise TypeError(f"Field {type(self).get_name(instance, self)} expects string{ornone}. Got: {value}")
         self.value = value
 
     def __get__(self, instance, value):
         return self.value
-
-    def _get_name(self, instance):
-        for k, v in type(instance).__dict__.items():
-            if v is self:
-                return k
 
 
 class ArgumentsField(metaclass=FieldValidationMeta):
@@ -102,7 +97,7 @@ class EmailField(CharField):
         if value is not None:
             pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'  # for email
             if re.match(pattern, value) is None:
-                raise TypeError(f"Field {self._get_name(instance)} dose not meet e-mail format")
+                raise TypeError(f"Field {type(self).get_name(instance, self)} dose not meet e-mail format")
         self.value = value
 
     def __get__(self, instance, value):
@@ -204,7 +199,10 @@ class ClientIDsField(metaclass=FieldValidationMeta):
             for el in value:
                 if not isinstance(el, int):
                     raise TypeError(f"Field {type(self).get_name(instance, self)} expects ints in a list. Got: {value}")
-        self.value = value
+        self.value: list = value
+
+    def __get__(self, instance, value):
+        return self.value
 
 class BaseRequest:
     response = {}
@@ -215,9 +213,31 @@ class BaseRequest:
         self.ctx = ctx
         self.store = store
 
-class ClientsInterestsRequest:
+class ClientsInterestsRequest(BaseRequest):
     client_ids = ClientIDsField(required=True)
     date = DateField(required=False, nullable=True)
+
+    def _validate_params(self):
+        try:
+            params = self.request['body']['arguments']
+            self.client_ids = params.get('client_ids', None)
+            self.date = params.get('date', None)
+        except (TypeError, AttributeError) as e:
+            self.response = {"error": e}
+            self.code = INVALID_REQUEST
+            return False
+        if self.client_ids is None:
+            self.response = {"error": "No valid client_ids were requested"}
+            self.code = INVALID_REQUEST
+            return False
+        return True
+
+    def process_request(self):
+        if self._validate_params():
+            self.response = {f'{i}': get_interests(1, i) for i in self.client_ids}
+            self.ctx['nclients'] = len(self.client_ids)
+            self.code = OK
+        return self.response, self.code
 
 
 class OnlineScoreRequest(BaseRequest):
@@ -301,6 +321,9 @@ class MethodRequest(BaseRequest):
         if self.method == 'online_score':
             osr = OnlineScoreRequest(self.request, self.ctx, self.store)
             self.response, self.code = osr.process_request()
+        elif self.method == 'clients_interests':
+            cir = ClientsInterestsRequest(self.request, self.ctx, self.store)
+            self.response, self.code = cir.process_request()
         return self.response, self.code
 
 
@@ -411,15 +434,15 @@ def method_handler(request, ctx, store):
         # code = OK
         # return response, code
 
-    if r.method == 'clients_interests':
-        cir = ClientsInterestsRequest()
-        try:
-            cir.client_ids = r.arguments.get('client_ids', None)
-            cir.date = r.arguments.get('date', None)
-        except (TypeError, AttributeError) as e:
-            response = {"error": e}
-            code = INVALID_REQUEST
-            return response, code
+    # if r.method == 'clients_interests':
+    #     cir = ClientsInterestsRequest()
+    #     try:
+    #         cir.client_ids = r.arguments.get('client_ids', None)
+    #         cir.date = r.arguments.get('date', None)
+    #     except (TypeError, AttributeError) as e:
+    #         response = {"error": e}
+    #         code = INVALID_REQUEST
+    #         return response, code
 
         # if not r.arguments.get('client_ids', None):
         #     response = {"error": "Bad arguments"}
@@ -445,10 +468,10 @@ def method_handler(request, ctx, store):
         #         code = INVALID_REQUEST
         #         return response, code
 
-        response = {f'{i}': get_interests(1, i) for i in r.arguments.get('client_ids', None)}
-        print(response)
-        ctx['nclients'] = len(r.arguments.get('client_ids', None))
-        code = OK
+        # response = {f'{i}': get_interests(1, i) for i in r.arguments.get('client_ids', None)}
+        # print(response)
+        # ctx['nclients'] = len(r.arguments.get('client_ids', None))
+        # code = OK
 
     return response, code
 
