@@ -1,0 +1,517 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import abc
+import json
+import datetime
+import logging
+import hashlib
+import re
+import uuid
+from optparse import OptionParser
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+from scoring_api.scoring import get_interests, get_score
+
+SALT = "Otus"
+ADMIN_LOGIN = "admin"
+ADMIN_SALT = "42"
+OK = 200
+BAD_REQUEST = 400
+FORBIDDEN = 403
+NOT_FOUND = 404
+INVALID_REQUEST = 422
+INTERNAL_ERROR = 500
+ERRORS = {
+    BAD_REQUEST: "Bad Request",
+    FORBIDDEN: "Forbidden",
+    NOT_FOUND: "Not Found",
+    INVALID_REQUEST: "Invalid Request",
+    INTERNAL_ERROR: "Internal Server Error",
+}
+UNKNOWN = 0
+MALE = 1
+FEMALE = 2
+GENDERS = {
+    UNKNOWN: "unknown",
+    MALE: "male",
+    FEMALE: "female",
+}
+
+
+class FieldValidationMeta(type):
+    @staticmethod
+    def get_name(instance, field):
+        for k, v in type(instance).__dict__.items():
+            if v is field:
+                return k
+
+    @classmethod
+    def validate_required_null(cls, instance, field, value):
+        if not field.nullable and value is None:
+            raise TypeError(f"Field {cls.get_name(instance, field)} can't be Null. Got: {value}")
+        if field.required and value is None:
+            raise TypeError(f"Field {cls.get_name(instance, field)} is required. Got: {value}")
+
+
+class CharField(metaclass=FieldValidationMeta):
+    def __init__(self, required=False, nullable=False):
+        self.required = required
+        self.nullable = nullable
+        self.value = None
+
+    def __set__(self, instance, value):
+        type(self).validate_required_null(instance, self, value)
+        ornone = " or None" if self.nullable else ''
+        if not isinstance(value, str) and not value is None:
+            raise TypeError(f"Field {self._get_name(instance)} expects string{ornone}. Got: {value}")
+        self.value = value
+
+    def __get__(self, instance, value):
+        return self.value
+
+    def _get_name(self, instance):
+        for k, v in type(instance).__dict__.items():
+            if v is self:
+                return k
+
+
+class ArgumentsField(metaclass=FieldValidationMeta):
+    def __init__(self, required=False, nullable=False):
+        self.required = required
+        self.nullable = nullable
+
+    def __set__(self, instance, value):
+        type(self).validate_required_null(instance, self, value)
+
+        # if value:
+        #     try:
+        #         int(value)
+        #     except ValueError:
+        #         raise TypeError(
+        #             f"Field {type(self).get_name(instance, self)} should be an int or a str represented number")
+        self.value = value
+
+    def __get__(self, instance, value):
+        return self.value
+
+
+class EmailField(CharField):
+    def __set__(self, instance, value):
+        super().__set__(instance, value)
+        if value is not None:
+            pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'  # for email
+            if re.match(pattern, value) is None:
+                raise TypeError(f"Field {self._get_name(instance)} dose not meet e-mail format")
+        self.value = value
+
+    def __get__(self, instance, value):
+        return self.value
+
+
+class PhoneField(metaclass=FieldValidationMeta):
+    def __init__(self, required=False, nullable=False):
+        self.required = required
+        self.nullable = nullable
+
+    def __set__(self, instance, value):
+        type(self).validate_required_null(instance, self, value)
+        if value:
+            try:
+                int(value)
+            except ValueError:
+                raise TypeError(
+                    f"Field {type(self).get_name(instance, self)} should be an int or a str represented number")
+            if str(value)[0] != '7':
+                raise TypeError(
+                    f"Field {type(self).get_name(instance, self)} should start with 7")
+            if len(str(value)) != 11:
+                raise TypeError(
+                    f"Field {type(self).get_name(instance, self)} should have exactly 11 digits")
+        self.value = value
+
+    def __get__(self, instance, value):
+        return self.value
+
+
+class DateField(metaclass=FieldValidationMeta):
+    def __init__(self, required=False, nullable=False):
+        self.required = required
+        self.nullable = nullable
+
+    def __set__(self, instance, value):
+        type(self).validate_required_null(instance, self, value)
+        if value:
+            try:
+                datetime.datetime.strptime(value, '%d.%m.%Y')
+            except ValueError:
+                raise TypeError(
+                    f"Field {type(self).get_name(instance, self)} should be str formatted as dd.mm.yyyy"
+                )
+        self.value = value
+
+    def __get__(self, instance, value):
+        return self.value
+
+
+class BirthDayField(DateField):
+    def __set__(self, instance, value):
+        super().__set__(instance, value)
+        if value:
+            date = datetime.datetime.strptime(value, '%d.%m.%Y')
+            age = datetime.datetime.today() - date
+            if age > datetime.timedelta(days=365 * 70):
+                raise TypeError(f"Field {type(self).get_name(instance, self)} should be < 70 years behind current date")
+        self.value = value
+
+    def __get__(self, instance, value):
+        return self.value
+
+
+class GenderField(metaclass=FieldValidationMeta):
+    def __init__(self, required=False, nullable=False):
+        self.required = required
+        self.nullable = nullable
+        self.value = None
+
+    def __set__(self, instance, value):
+        type(self).validate_required_null(instance, self, value)
+        ornone = " or None" if self.nullable else ''
+        if not isinstance(value, int) and value is not None:
+            raise TypeError(f"Field {type(self).get_name(instance, self)} expects int{ornone}. Got: {value}")
+        if isinstance(value, int) and value not in [0, 1, 2]:
+            raise TypeError(f"Field {type(self).get_name(instance, self)} expects int values of {ornone}. Got: {value}")
+        self.value = value
+
+    def __get__(self, instance, value):
+        return self.value
+
+
+class ClientIDsField(metaclass=FieldValidationMeta):
+    def __init__(self, required=False, nullable=False):
+        self.required = required
+        self.nullable = nullable
+
+    def __set__(self, instance, value):
+        type(self).validate_required_null(instance, self, value)
+        ornone = " or None" if self.nullable else ''
+        if not isinstance(value, list) and value is not None:
+            raise TypeError(f"Field {type(self).get_name(instance, self)} expects list{ornone}. Got: {value}")
+        elif isinstance(value, list):
+            if len(value) == 0:
+                raise TypeError(f"Field {type(self).get_name(instance, self)} expects non-empty list. Got: {value}")
+        if value:
+            for el in value:
+                if not isinstance(el, int):
+                    raise TypeError(f"Field {type(self).get_name(instance, self)} expects ints in a list. Got: {value}")
+        self.value = value
+
+class BaseRequest:
+    response = {}
+    code = OK
+
+    def __init__(self, request, ctx, store):
+        self.request = request
+        self.ctx = ctx
+        self.store = store
+
+class ClientsInterestsRequest:
+    client_ids = ClientIDsField(required=True)
+    date = DateField(required=False, nullable=True)
+
+
+class OnlineScoreRequest(BaseRequest):
+    first_name = CharField(required=False, nullable=True)
+    last_name = CharField(required=False, nullable=True)
+    email = EmailField(required=False, nullable=True)
+    phone = PhoneField(required=False, nullable=True)
+    birthday = BirthDayField(required=False, nullable=True)
+    gender = GenderField(required=False, nullable=True)
+
+    # def __init__(self, request, ctx, store):
+    #     super().__init__(self, request, ctx, store)
+    def _validate_params(self):
+        try:
+            # params = dict()
+            # if self.request['body'].get('arguments', None):
+            params = self.request['body']['arguments']
+            self.first_name = params.get('first_name', None)
+            self.last_name = params.get('last_name', None)
+            self.email = params.get('email', None)
+            self.phone = params.get('phone', None)
+            self.birthday = params.get('birthday', None)
+            self.gender = params.get('gender', None)
+        except (TypeError, AttributeError) as e:
+            self.response = {"error": e}
+            self.code = INVALID_REQUEST
+            return False
+        if not (self.phone and self.email or self.first_name and self.last_name or self.gender is not None and self.birthday):
+            self.response = {"error": "No valid pair of arguments found"}
+            self.code = INVALID_REQUEST
+            return False
+        return True
+
+
+    def process_request(self):
+        if self._validate_params():
+            params_list = ['phone', 'email', 'birthday', 'gender', 'first_name', 'last_name']
+            params_vals = [self.phone, self.email, self.birthday, self.gender, self.first_name, self.last_name]
+            params = zip(params_list, params_vals)
+            score = get_score(self.store, *params_vals)
+            self.response = {'score': score}
+            self.ctx['has'] = [f for f, v in params if v is not None]
+            self.code = OK
+        return self.response, self.code
+
+    # if not (
+    #         r.arguments.get('phone', None) and r.arguments.get('email', None) or
+    #         r.arguments.get('first_name', None) and r.arguments.get('last_name', None) or
+    #         r.arguments.get('gender', None) in [0, 1, 2] and r.arguments.get('birthday', None)
+    # ):
+    #     response = {"error": "Bad arguments"}
+    #     code = INVALID_REQUEST
+    #     return response, code
+
+class MethodRequest(BaseRequest):
+    account = CharField(required=False, nullable=True)
+    login = CharField(required=True, nullable=True)
+    token = CharField(required=True, nullable=True)
+    arguments = ArgumentsField(required=True, nullable=True)
+    method = CharField(required=True, nullable=False)
+
+    @property
+    def is_admin(self):
+        return self.login == ADMIN_LOGIN
+
+    def check_auth(self):
+        print('is admin? ', self.is_admin)
+        if self.is_admin:
+            msg = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
+            digest = hashlib.sha512(msg.encode()).hexdigest()
+        else:
+            msg = self.account + self.login + SALT
+            digest = hashlib.sha512(msg.encode()).hexdigest()
+        if digest == self.token:
+            print('returning True')
+            return True
+        print('returning False')
+        return False
+
+    def process_request(self):
+        if self.method == 'online_score':
+            osr = OnlineScoreRequest(self.request, self.ctx, self.store)
+            self.response, self.code = osr.process_request()
+        return self.response, self.code
+
+
+def method_handler(request, ctx, store):
+    response, code = None, None
+
+    r = MethodRequest(request, ctx, store)
+    # print(request)
+    data = request['body']
+    try:
+        r.account = data.get('account', None)
+        print('r.account: ', r.account)
+        r.login = data.get('login', None)
+        r.token = data.get('token', None)
+        r.arguments = data.get('arguments', None)
+        r.method = data.get('method', None)
+    except TypeError as e:
+        response = {"error": e}
+        code = INVALID_REQUEST
+        print(e)
+        return response, code
+    print('hello')
+    # if not r.account or not r.login:
+    #     response = '{}'
+    #     code = INVALID_REQUEST
+    #     return response, code
+
+    if not r.check_auth():
+        response = '{"error": "Forbidden"}'
+        code = FORBIDDEN
+        print(response)
+        return response, code
+    print('finished checkin auth')
+    if r.is_admin:
+        response = {"score": 42}
+        code = OK
+        return response, code
+
+    response, code = r.process_request()
+    # if r.method not in {'online_score', 'clients_interests'} or not r.arguments:
+    #     response = {'error': 'Invalid request'}
+    #     code = INVALID_REQUEST
+    #     return response, code
+
+    # if r.method == 'online_score':
+    #     osr = OnlineScoreRequest()
+    #     try:
+    #         osr.first_name = r.arguments.get('first_name', None)
+    #         osr.last_name = r.arguments.get('last_name', None)
+    #         osr.email = r.arguments.get('email', None)
+    #         osr.phone = r.arguments.get('phone', None)
+    #         osr.birthday = r.arguments.get('birthday', None)
+    #         osr.gender = r.arguments.get('gender', None)
+    #     except (TypeError, AttributeError) as e:
+    #         response = {"error": e}
+    #         code = INVALID_REQUEST
+    #         return response, code
+
+        # if not (
+        #         r.arguments.get('phone', None) and r.arguments.get('email', None) or
+        #         r.arguments.get('first_name', None) and r.arguments.get('last_name', None) or
+        #         r.arguments.get('gender', None) in [0, 1, 2] and r.arguments.get('birthday', None)
+        # ):
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # elif r.arguments.get('phone', None) and str(r.arguments.get('phone', None))[0] != '7':
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # elif r.arguments.get('email', None) and re.match(pattern, r.arguments.get('email', None)) is None:
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # elif r.arguments.get('gender', None) and r.arguments.get('gender', None) not in [0, 1, 2]:
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # elif r.arguments.get('birthday', None):
+        #     try:
+        #         date = datetime.datetime.strptime(r.arguments.get('birthday', None), '%d.%m.%Y')
+        #         today = datetime.datetime.today()
+        #         age = today - date
+        #     except:
+        #         response = {"error": "Bad arguments"}
+        #         code = INVALID_REQUEST
+        #         return response, code
+        #     if age > datetime.timedelta(days=365 * 70):
+        #         response = {"error": "Bad arguments"}
+        #         code = INVALID_REQUEST
+        #         return response, code
+        # if r.arguments.get('first_name', None) and not isinstance(r.arguments.get('first_name', None), str):
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # if r.arguments.get('last_name', None) and not isinstance(r.arguments.get('last_name', None), str):
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # score = get_score(1, r.arguments.get('phone', None),
+        #                   r.arguments.get('email', None),
+        #                   r.arguments.get('birthdaz', None),
+        #                   r.arguments.get('gender', None),
+        #                   r.arguments.get('first_name', None),
+        #                   r.arguments.get('last_name', None))
+        # response = {'score': score}
+        # ctx['has'] = [f for f, v in r.arguments.items()]
+        # code = OK
+        # return response, code
+
+    if r.method == 'clients_interests':
+        cir = ClientsInterestsRequest()
+        try:
+            cir.client_ids = r.arguments.get('client_ids', None)
+            cir.date = r.arguments.get('date', None)
+        except (TypeError, AttributeError) as e:
+            response = {"error": e}
+            code = INVALID_REQUEST
+            return response, code
+
+        # if not r.arguments.get('client_ids', None):
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # if not isinstance(r.arguments.get('client_ids', None), list):
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # elif not all(isinstance(elem, int) for elem in r.arguments.get('client_ids', None)):
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # elif not len(r.arguments.get('client_ids', None)) > 0:
+        #     response = {"error": "Bad arguments"}
+        #     code = INVALID_REQUEST
+        #     return response, code
+        # elif r.arguments.get('date', None) and isinstance(r.arguments.get('date', None), str):
+        #     try:
+        #         date = datetime.datetime.strptime(r.arguments.get('date', None), '%d.%m.%Y')
+        #     except:
+        #         response = {"error": "Bad arguments"}
+        #         code = INVALID_REQUEST
+        #         return response, code
+
+        response = {f'{i}': get_interests(1, i) for i in r.arguments.get('client_ids', None)}
+        print(response)
+        ctx['nclients'] = len(r.arguments.get('client_ids', None))
+        code = OK
+
+    return response, code
+
+
+class MainHTTPHandler(BaseHTTPRequestHandler):
+    router = {
+        "method": method_handler
+    }
+    store = None
+
+    def get_request_id(self, headers):
+        return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
+
+    def do_POST(self):
+        response, code = {}, OK
+        context = {"request_id": self.get_request_id(self.headers)}
+        request = None
+        try:
+            data_string = self.rfile.read(int(self.headers['Content-Length']))
+            request = json.loads(data_string)
+        except:
+            code = BAD_REQUEST
+
+        if request:
+            path = self.path.strip("/")
+            print('path', path)
+            logging.info("%s: %s %s" % (self.path, data_string, context["request_id"]))
+            if path in self.router:
+                try:
+                    response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)
+                except Exception as e:
+                    logging.exception("Unexpected error: %s" % e)
+                    code = INTERNAL_ERROR
+            else:
+                code = NOT_FOUND
+
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        if code not in ERRORS:
+            r = {"response": response, "code": code}
+        else:
+            r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}
+        context.update(r)
+        logging.info(context)
+        self.wfile.write(json.dumps(r).encode('utf-8'))
+        return
+
+
+if __name__ == "__main__":
+    # op = OptionParser()
+    # op.add_option("-p", "--port", action="store", type=int, default=8080)
+    # op.add_option("-l", "--log", action="store", default=None)
+    # (opts, args) = op.parse_args()
+    # logging.basicConfig(filename=opts.log, level=logging.INFO,
+    logging.basicConfig(level=logging.INFO,
+                        format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
+    # server = HTTPServer(("localhost", opts.port), MainHTTPHandler)
+    server = HTTPServer(("localhost", 7500), MainHTTPHandler)
+    # logging.info("Starting server at %s" % opts.port)
+    logging.info("Starting server at %s" % 7500)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    server.server_close()
