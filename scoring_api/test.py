@@ -26,7 +26,8 @@ class TestSuite(unittest.TestCase):
     def get_response(self, request):
         return api.method_handler({"body": request, "headers": self.headers}, self.context, self.settings)
 
-    def set_valid_auth(self, request):
+    @staticmethod
+    def set_valid_auth(request):
         if request.get("login") == api.ADMIN_LOGIN:
             msg = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
             request["token"] = hashlib.sha512(msg.encode()).hexdigest()
@@ -44,7 +45,6 @@ class TestSuite(unittest.TestCase):
         {"account": "horns&hoofs", "login": "admin", "method": "online_score", "token": "", "arguments": {}},
     ])
     def test_bad_auth(self, request):
-        print('test_bad_auth request: ', request)
         _, code = self.get_response(request)
         self.assertEqual(api.FORBIDDEN, code)
 
@@ -54,7 +54,6 @@ class TestSuite(unittest.TestCase):
         {"account": "horns&hoofs", "method": "online_score", "arguments": {}},
     ])
     def test_invalid_method_request(self, request):
-        print('request', request)
         self.set_valid_auth(request)
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
@@ -76,7 +75,6 @@ class TestSuite(unittest.TestCase):
         {"email": "stupnikov@otus.ru", "gender": 1, "last_name": 2},
     ])
     def test_invalid_score_request(self, arguments):
-        print('test_invalid_score_request args: ', arguments)
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
         self.set_valid_auth(request)
         response, code = self.get_response(request)
@@ -94,7 +92,6 @@ class TestSuite(unittest.TestCase):
          "first_name": "a", "last_name": "b"},
     ])
     def test_ok_score_request(self, arguments):
-        print('test_ok_score_request arg: ', arguments)
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
         self.set_valid_auth(request)
         response, code = self.get_response(request)
@@ -121,7 +118,6 @@ class TestSuite(unittest.TestCase):
         {"client_ids": [1, 2], "date": "XXX"},
     ])
     def test_invalid_interests_request(self, arguments):
-        print('test_invalid_interests_request args: ', arguments)
         request = {"account": "horns&hoofs", "login": "h&f", "method": "clients_interests", "arguments": arguments}
         self.set_valid_auth(request)
         response, code = self.get_response(request)
@@ -134,7 +130,6 @@ class TestSuite(unittest.TestCase):
         {"client_ids": [0]},
     ])
     def test_ok_interests_request(self, arguments):
-        print('test_ok_interests_request args: ', arguments)
         request = {"account": "horns&hoofs", "login": "h&f", "method": "clients_interests", "arguments": arguments}
         self.set_valid_auth(request)
         response, code = self.get_response(request)

@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-import abc
-import json
+import argparse
 import datetime
-import logging
 import hashlib
+import json
+import logging
 import re
 import uuid
-from optparse import OptionParser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from scoring_api.scoring import get_interests, get_score
@@ -47,11 +45,11 @@ class FieldValidationMeta(type):
                 return k
 
     @classmethod
-    def validate_required_null(cls, instance, field, value):
+    def validate_required_null(mcs, instance, field, value):
         if not field.nullable and value is None:
-            raise TypeError(f"Field {cls.get_name(instance, field)} can't be Null. Got: {value}")
+            raise TypeError(f"Field {mcs.get_name(instance, field)} can't be Null. Got: {value}")
         if field.required and value is None:
-            raise TypeError(f"Field {cls.get_name(instance, field)} is required. Got: {value}")
+            raise TypeError(f"Field {mcs.get_name(instance, field)} is required. Got: {value}")
 
 
 class CharField(metaclass=FieldValidationMeta):
@@ -78,14 +76,7 @@ class ArgumentsField(metaclass=FieldValidationMeta):
 
     def __set__(self, instance, value):
         type(self).validate_required_null(instance, self, value)
-
-        # if value:
-        #     try:
-        #         int(value)
-        #     except ValueError:
-        #         raise TypeError(
-        #             f"Field {type(self).get_name(instance, self)} should be an int or a str represented number")
-        self.value = value
+        self.value: dict = value
 
     def __get__(self, instance, value):
         return self.value
@@ -95,19 +86,16 @@ class EmailField(CharField):
     def __set__(self, instance, value):
         super().__set__(instance, value)
         if value is not None:
-            pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'  # for email
+            pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if re.match(pattern, value) is None:
                 raise TypeError(f"Field {type(self).get_name(instance, self)} dose not meet e-mail format")
         self.value = value
 
-    def __get__(self, instance, value):
-        return self.value
 
-
-class PhoneField(metaclass=FieldValidationMeta):
-    def __init__(self, required=False, nullable=False):
-        self.required = required
-        self.nullable = nullable
+class PhoneField(CharField, metaclass=FieldValidationMeta):
+    # def __init__(self, required=False, nullable=False):
+    #     self.required = required
+    #     self.nullable = nullable
 
     def __set__(self, instance, value):
         type(self).validate_required_null(instance, self, value)
@@ -123,10 +111,7 @@ class PhoneField(metaclass=FieldValidationMeta):
             if len(str(value)) != 11:
                 raise TypeError(
                     f"Field {type(self).get_name(instance, self)} should have exactly 11 digits")
-        self.value = value
-
-    def __get__(self, instance, value):
-        return self.value
+        self.value: str = value
 
 
 class DateField(metaclass=FieldValidationMeta):
@@ -143,7 +128,7 @@ class DateField(metaclass=FieldValidationMeta):
                 raise TypeError(
                     f"Field {type(self).get_name(instance, self)} should be str formatted as dd.mm.yyyy"
                 )
-        self.value = value
+        self.value: datetime.datetime = value
 
     def __get__(self, instance, value):
         return self.value
@@ -157,17 +142,13 @@ class BirthDayField(DateField):
             age = datetime.datetime.today() - date
             if age > datetime.timedelta(days=365 * 70):
                 raise TypeError(f"Field {type(self).get_name(instance, self)} should be < 70 years behind current date")
-        self.value = value
-
-    def __get__(self, instance, value):
-        return self.value
+        self.value: datetime = value
 
 
 class GenderField(metaclass=FieldValidationMeta):
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
-        self.value = None
 
     def __set__(self, instance, value):
         type(self).validate_required_null(instance, self, value)
@@ -176,7 +157,7 @@ class GenderField(metaclass=FieldValidationMeta):
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects int{ornone}. Got: {value}")
         if isinstance(value, int) and value not in [0, 1, 2]:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects int values of {ornone}. Got: {value}")
-        self.value = value
+        self.value: int = value
 
     def __get__(self, instance, value):
         return self.value
@@ -204,6 +185,7 @@ class ClientIDsField(metaclass=FieldValidationMeta):
     def __get__(self, instance, value):
         return self.value
 
+
 class BaseRequest:
     response = {}
     code = OK
@@ -213,13 +195,14 @@ class BaseRequest:
         self.ctx = ctx
         self.store = store
 
+
 class ClientsInterestsRequest(BaseRequest):
     client_ids = ClientIDsField(required=True)
     date = DateField(required=False, nullable=True)
 
     def _validate_params(self):
         try:
-            params = self.request['body']['arguments']
+            params: dict = self.request['body']['arguments']
             self.client_ids = params.get('client_ids', None)
             self.date = params.get('date', None)
         except (TypeError, AttributeError) as e:
@@ -248,13 +231,9 @@ class OnlineScoreRequest(BaseRequest):
     birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
-    # def __init__(self, request, ctx, store):
-    #     super().__init__(self, request, ctx, store)
     def _validate_params(self):
         try:
-            # params = dict()
-            # if self.request['body'].get('arguments', None):
-            params = self.request['body']['arguments']
+            params: dict = self.request['body']['arguments']
             self.first_name = params.get('first_name', None)
             self.last_name = params.get('last_name', None)
             self.email = params.get('email', None)
@@ -271,7 +250,6 @@ class OnlineScoreRequest(BaseRequest):
             return False
         return True
 
-
     def process_request(self):
         if self._validate_params():
             params_list = ['phone', 'email', 'birthday', 'gender', 'first_name', 'last_name']
@@ -283,14 +261,6 @@ class OnlineScoreRequest(BaseRequest):
             self.code = OK
         return self.response, self.code
 
-    # if not (
-    #         r.arguments.get('phone', None) and r.arguments.get('email', None) or
-    #         r.arguments.get('first_name', None) and r.arguments.get('last_name', None) or
-    #         r.arguments.get('gender', None) in [0, 1, 2] and r.arguments.get('birthday', None)
-    # ):
-    #     response = {"error": "Bad arguments"}
-    #     code = INVALID_REQUEST
-    #     return response, code
 
 class MethodRequest(BaseRequest):
     account = CharField(required=False, nullable=True)
@@ -304,7 +274,6 @@ class MethodRequest(BaseRequest):
         return self.login == ADMIN_LOGIN
 
     def check_auth(self):
-        print('is admin? ', self.is_admin)
         if self.is_admin:
             msg = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
             digest = hashlib.sha512(msg.encode()).hexdigest()
@@ -312,167 +281,44 @@ class MethodRequest(BaseRequest):
             msg = self.account + self.login + SALT
             digest = hashlib.sha512(msg.encode()).hexdigest()
         if digest == self.token:
-            print('returning True')
             return True
-        print('returning False')
+        self.response = '{"error": "Forbidden"}'
+        self.code = FORBIDDEN
         return False
 
+    def _validate_params(self):
+        params: dict = self.request['body']
+        try:
+            self.account = params.get('account', None)
+            self.login = params.get('login', None)
+            self.token = params.get('token', None)
+            self.arguments = params.get('arguments', None)
+            self.method = params.get('method', None)
+        except TypeError as e:
+            self.response = {"error": e}
+            self.code = INVALID_REQUEST
+            return False
+        return True
+
     def process_request(self):
-        if self.method == 'online_score':
-            osr = OnlineScoreRequest(self.request, self.ctx, self.store)
-            self.response, self.code = osr.process_request()
-        elif self.method == 'clients_interests':
-            cir = ClientsInterestsRequest(self.request, self.ctx, self.store)
-            self.response, self.code = cir.process_request()
+        if self._validate_params() and self.check_auth():
+            if self.is_admin:
+                self.response = {"score": 42}
+                self.code = OK
+                return self.response, self.code
+
+            if self.method == 'online_score':
+                osr = OnlineScoreRequest(self.request, self.ctx, self.store)
+                self.response, self.code = osr.process_request()
+            elif self.method == 'clients_interests':
+                cir = ClientsInterestsRequest(self.request, self.ctx, self.store)
+                self.response, self.code = cir.process_request()
         return self.response, self.code
 
 
 def method_handler(request, ctx, store):
-    response, code = None, None
-
     r = MethodRequest(request, ctx, store)
-    # print(request)
-    data = request['body']
-    try:
-        r.account = data.get('account', None)
-        print('r.account: ', r.account)
-        r.login = data.get('login', None)
-        r.token = data.get('token', None)
-        r.arguments = data.get('arguments', None)
-        r.method = data.get('method', None)
-    except TypeError as e:
-        response = {"error": e}
-        code = INVALID_REQUEST
-        print(e)
-        return response, code
-    print('hello')
-    # if not r.account or not r.login:
-    #     response = '{}'
-    #     code = INVALID_REQUEST
-    #     return response, code
-
-    if not r.check_auth():
-        response = '{"error": "Forbidden"}'
-        code = FORBIDDEN
-        print(response)
-        return response, code
-    print('finished checkin auth')
-    if r.is_admin:
-        response = {"score": 42}
-        code = OK
-        return response, code
-
     response, code = r.process_request()
-    # if r.method not in {'online_score', 'clients_interests'} or not r.arguments:
-    #     response = {'error': 'Invalid request'}
-    #     code = INVALID_REQUEST
-    #     return response, code
-
-    # if r.method == 'online_score':
-    #     osr = OnlineScoreRequest()
-    #     try:
-    #         osr.first_name = r.arguments.get('first_name', None)
-    #         osr.last_name = r.arguments.get('last_name', None)
-    #         osr.email = r.arguments.get('email', None)
-    #         osr.phone = r.arguments.get('phone', None)
-    #         osr.birthday = r.arguments.get('birthday', None)
-    #         osr.gender = r.arguments.get('gender', None)
-    #     except (TypeError, AttributeError) as e:
-    #         response = {"error": e}
-    #         code = INVALID_REQUEST
-    #         return response, code
-
-        # if not (
-        #         r.arguments.get('phone', None) and r.arguments.get('email', None) or
-        #         r.arguments.get('first_name', None) and r.arguments.get('last_name', None) or
-        #         r.arguments.get('gender', None) in [0, 1, 2] and r.arguments.get('birthday', None)
-        # ):
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # elif r.arguments.get('phone', None) and str(r.arguments.get('phone', None))[0] != '7':
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # elif r.arguments.get('email', None) and re.match(pattern, r.arguments.get('email', None)) is None:
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # elif r.arguments.get('gender', None) and r.arguments.get('gender', None) not in [0, 1, 2]:
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # elif r.arguments.get('birthday', None):
-        #     try:
-        #         date = datetime.datetime.strptime(r.arguments.get('birthday', None), '%d.%m.%Y')
-        #         today = datetime.datetime.today()
-        #         age = today - date
-        #     except:
-        #         response = {"error": "Bad arguments"}
-        #         code = INVALID_REQUEST
-        #         return response, code
-        #     if age > datetime.timedelta(days=365 * 70):
-        #         response = {"error": "Bad arguments"}
-        #         code = INVALID_REQUEST
-        #         return response, code
-        # if r.arguments.get('first_name', None) and not isinstance(r.arguments.get('first_name', None), str):
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # if r.arguments.get('last_name', None) and not isinstance(r.arguments.get('last_name', None), str):
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # score = get_score(1, r.arguments.get('phone', None),
-        #                   r.arguments.get('email', None),
-        #                   r.arguments.get('birthdaz', None),
-        #                   r.arguments.get('gender', None),
-        #                   r.arguments.get('first_name', None),
-        #                   r.arguments.get('last_name', None))
-        # response = {'score': score}
-        # ctx['has'] = [f for f, v in r.arguments.items()]
-        # code = OK
-        # return response, code
-
-    # if r.method == 'clients_interests':
-    #     cir = ClientsInterestsRequest()
-    #     try:
-    #         cir.client_ids = r.arguments.get('client_ids', None)
-    #         cir.date = r.arguments.get('date', None)
-    #     except (TypeError, AttributeError) as e:
-    #         response = {"error": e}
-    #         code = INVALID_REQUEST
-    #         return response, code
-
-        # if not r.arguments.get('client_ids', None):
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # if not isinstance(r.arguments.get('client_ids', None), list):
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # elif not all(isinstance(elem, int) for elem in r.arguments.get('client_ids', None)):
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # elif not len(r.arguments.get('client_ids', None)) > 0:
-        #     response = {"error": "Bad arguments"}
-        #     code = INVALID_REQUEST
-        #     return response, code
-        # elif r.arguments.get('date', None) and isinstance(r.arguments.get('date', None), str):
-        #     try:
-        #         date = datetime.datetime.strptime(r.arguments.get('date', None), '%d.%m.%Y')
-        #     except:
-        #         response = {"error": "Bad arguments"}
-        #         code = INVALID_REQUEST
-        #         return response, code
-
-        # response = {f'{i}': get_interests(1, i) for i in r.arguments.get('client_ids', None)}
-        # print(response)
-        # ctx['nclients'] = len(r.arguments.get('client_ids', None))
-        # code = OK
-
     return response, code
 
 
@@ -497,7 +343,6 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
 
         if request:
             path = self.path.strip("/")
-            print('path', path)
             logging.info("%s: %s %s" % (self.path, data_string, context["request_id"]))
             if path in self.router:
                 try:
@@ -522,6 +367,11 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--port', type=int, default=8080)
+    parser.add_argument('-l', '--log', type=str, default=None, const='./config.ini', nargs='?', help='Path to a config file')
+    args: argparse.Namespace = parser.parse_args()
+
     # op = OptionParser()
     # op.add_option("-p", "--port", action="store", type=int, default=8080)
     # op.add_option("-l", "--log", action="store", default=None)
@@ -530,9 +380,10 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
     # server = HTTPServer(("localhost", opts.port), MainHTTPHandler)
-    server = HTTPServer(("localhost", 7500), MainHTTPHandler)
-    # logging.info("Starting server at %s" % opts.port)
-    logging.info("Starting server at %s" % 7500)
+    # server = HTTPServer(("localhost", 7500), MainHTTPHandler)
+    server = HTTPServer(("localhost", args.port), MainHTTPHandler)
+    logging.info("Starting server at %s" % args.port)
+    # logging.info("Starting server at %s" % 7500)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
