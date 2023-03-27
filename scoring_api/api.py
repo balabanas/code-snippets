@@ -8,6 +8,7 @@ import logging
 import re
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Union
 
 from scoring_api.scoring import get_interests, get_score
 
@@ -56,14 +57,13 @@ class CharField(metaclass=FieldValidationMeta):
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
-        self.value = None
 
     def __set__(self, instance, value):
         type(self).validate_required_null(instance, self, value)
         ornone = " or None" if self.nullable else ''
         if not isinstance(value, str) and not value is None:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects string{ornone}. Got: {value}")
-        self.value = value
+        self.value: Union[str, None] = value
 
     def __get__(self, instance, value):
         return self.value
@@ -76,7 +76,7 @@ class ArgumentsField(metaclass=FieldValidationMeta):
 
     def __set__(self, instance, value):
         type(self).validate_required_null(instance, self, value)
-        self.value: dict = value
+        self.value: Union[dict, None] = value
 
     def __get__(self, instance, value):
         return self.value
@@ -111,7 +111,7 @@ class PhoneField(CharField, metaclass=FieldValidationMeta):
             if len(str(value)) != 11:
                 raise TypeError(
                     f"Field {type(self).get_name(instance, self)} should have exactly 11 digits")
-        self.value: str = value
+        self.value = value
 
 
 class DateField(metaclass=FieldValidationMeta):
@@ -128,7 +128,7 @@ class DateField(metaclass=FieldValidationMeta):
                 raise TypeError(
                     f"Field {type(self).get_name(instance, self)} should be str formatted as dd.mm.yyyy"
                 )
-        self.value: datetime.datetime = value
+        self.value: Union[datetime.datetime, None] = value
 
     def __get__(self, instance, value):
         return self.value
@@ -142,7 +142,7 @@ class BirthDayField(DateField):
             age = datetime.datetime.today() - date
             if age > datetime.timedelta(days=365 * 70):
                 raise TypeError(f"Field {type(self).get_name(instance, self)} should be < 70 years behind current date")
-        self.value: datetime = value
+        self.value = value
 
 
 class GenderField(metaclass=FieldValidationMeta):
@@ -157,7 +157,7 @@ class GenderField(metaclass=FieldValidationMeta):
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects int{ornone}. Got: {value}")
         if isinstance(value, int) and value not in [0, 1, 2]:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects int values of {ornone}. Got: {value}")
-        self.value: int = value
+        self.value: Union[int, None] = value
 
     def __get__(self, instance, value):
         return self.value
@@ -244,7 +244,9 @@ class OnlineScoreRequest(BaseRequest):
             self.response = {"error": e}
             self.code = INVALID_REQUEST
             return False
-        if not (self.phone and self.email or self.first_name and self.last_name or self.gender is not None and self.birthday):
+        if not (self.phone and self.email
+                or self.first_name and self.last_name
+                or self.gender is not None and self.birthday):
             self.response = {"error": "No valid pair of arguments found"}
             self.code = INVALID_REQUEST
             return False
@@ -371,19 +373,10 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--port', type=int, default=8080)
     parser.add_argument('-l', '--log', type=str, default=None, const='./config.ini', nargs='?', help='Path to a config file')
     args: argparse.Namespace = parser.parse_args()
-
-    # op = OptionParser()
-    # op.add_option("-p", "--port", action="store", type=int, default=8080)
-    # op.add_option("-l", "--log", action="store", default=None)
-    # (opts, args) = op.parse_args()
-    # logging.basicConfig(filename=opts.log, level=logging.INFO,
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(filename=args.log, level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
-    # server = HTTPServer(("localhost", opts.port), MainHTTPHandler)
-    # server = HTTPServer(("localhost", 7500), MainHTTPHandler)
     server = HTTPServer(("localhost", args.port), MainHTTPHandler)
     logging.info("Starting server at %s" % args.port)
-    # logging.info("Starting server at %s" % 7500)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
