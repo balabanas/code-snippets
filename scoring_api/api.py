@@ -39,6 +39,8 @@ GENDERS = {
 
 
 class FieldValidationMeta(type):
+    """Metaclass, implementing methods to pull attributes name out of instances during validation,
+    and also method for basic validation of `required` and `nullable` properties"""
     @staticmethod
     def get_name(instance, field):
         for k, v in type(instance).__dict__.items():
@@ -54,6 +56,7 @@ class FieldValidationMeta(type):
 
 
 class CharField(metaclass=FieldValidationMeta):
+    """Storage for general char arguments, with validating descriptor"""
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
@@ -70,6 +73,7 @@ class CharField(metaclass=FieldValidationMeta):
 
 
 class ArgumentsField(metaclass=FieldValidationMeta):
+    """Storage for arguments dict, with validating descriptor"""
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
@@ -83,6 +87,7 @@ class ArgumentsField(metaclass=FieldValidationMeta):
 
 
 class EmailField(CharField):
+    """Storage for email argument, with validating descriptor"""
     def __set__(self, instance, value):
         super().__set__(instance, value)
         if value is not None:
@@ -93,6 +98,7 @@ class EmailField(CharField):
 
 
 class PhoneField(CharField, metaclass=FieldValidationMeta):
+    """Storage for phone argument, with validating descriptor"""
     def __set__(self, instance, value):
         type(self).validate_required_null(instance, self, value)
         if value:
@@ -111,6 +117,7 @@ class PhoneField(CharField, metaclass=FieldValidationMeta):
 
 
 class DateField(metaclass=FieldValidationMeta):
+    """Storage for date argument, with validating descriptor"""
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
@@ -131,6 +138,7 @@ class DateField(metaclass=FieldValidationMeta):
 
 
 class BirthDayField(DateField):
+    """Storage for birthday argument, with validating descriptor"""
     def __set__(self, instance, value):
         super().__set__(instance, value)
         if value:
@@ -142,6 +150,7 @@ class BirthDayField(DateField):
 
 
 class GenderField(metaclass=FieldValidationMeta):
+    """Storage for gender argument, with validating descriptor"""
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
@@ -160,6 +169,7 @@ class GenderField(metaclass=FieldValidationMeta):
 
 
 class ClientIDsField(metaclass=FieldValidationMeta):
+    """Storage for client IDs list, with validating descriptor"""
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
@@ -183,6 +193,8 @@ class ClientIDsField(metaclass=FieldValidationMeta):
 
 
 class BaseRequest:
+    """Parent class that defines response and code attributes, and initialize class internalizing request, context and
+     store number"""
     response = {}
     code = OK
 
@@ -193,6 +205,8 @@ class BaseRequest:
 
 
 class ClientsInterestsRequest(BaseRequest):
+    """Defines clients-interests scoring arguments, parses argument's dictionary and assign values,
+        implements methods to validate fields, call scoring function and return response"""
     client_ids = ClientIDsField(required=True)
     date = DateField(required=False, nullable=True)
 
@@ -220,6 +234,8 @@ class ClientsInterestsRequest(BaseRequest):
 
 
 class OnlineScoreRequest(BaseRequest):
+    """Defines online-score scoring arguments, parses argument's dictionary and assign values,
+        implements methods to validate fields, call scoring function and return response"""
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
     email = EmailField(required=False, nullable=True)
@@ -261,6 +277,9 @@ class OnlineScoreRequest(BaseRequest):
 
 
 class MethodRequest(BaseRequest):
+    """Defines request fields, parses request body and assign values,
+    implements methods to check if user is admin, if it is authenticated,
+    fields validation, and request routing, depending on scoring method passed"""
     account = CharField(required=False, nullable=True)
     login = CharField(required=True, nullable=True)
     token = CharField(required=True, nullable=True)
