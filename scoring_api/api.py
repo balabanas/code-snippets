@@ -93,10 +93,6 @@ class EmailField(CharField):
 
 
 class PhoneField(CharField, metaclass=FieldValidationMeta):
-    # def __init__(self, required=False, nullable=False):
-    #     self.required = required
-    #     self.nullable = nullable
-
     def __set__(self, instance, value):
         type(self).validate_required_null(instance, self, value)
         if value:
@@ -205,7 +201,7 @@ class ClientsInterestsRequest(BaseRequest):
             params: dict = self.request['body']['arguments']
             self.client_ids = params.get('client_ids', None)
             self.date = params.get('date', None)
-        except (TypeError, AttributeError) as e:
+        except TypeError as e:
             self.response = e.args[0]
             self.code = INVALID_REQUEST
             return False
@@ -240,7 +236,7 @@ class OnlineScoreRequest(BaseRequest):
             self.phone = params.get('phone', None)
             self.birthday = params.get('birthday', None)
             self.gender = params.get('gender', None)
-        except (TypeError, AttributeError) as e:
+        except TypeError as e:
             self.response = e.args[0]
             self.code = INVALID_REQUEST
             return False
@@ -282,8 +278,6 @@ class MethodRequest(BaseRequest):
         else:
             msg = self.account + self.login + SALT
             digest = hashlib.sha512(msg.encode()).hexdigest()
-            logging.info('msg: ' + msg)
-            logging.info('digest (token): ' + digest)
         if digest == self.token:
             return True
         self.response = "Forbidden"

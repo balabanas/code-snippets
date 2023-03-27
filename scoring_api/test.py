@@ -3,7 +3,7 @@ import datetime
 import functools
 import unittest
 
-import api
+from scoring_api import api
 
 
 def cases(cases):
@@ -108,7 +108,7 @@ class TestSuite(unittest.TestCase):
         self.assertEqual(api.OK, code)
         score = response.get("score")
         self.assertEqual(score, 42)
-    #
+
     @cases([
         {},
         {"date": "20.07.2017"},
