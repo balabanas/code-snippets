@@ -116,6 +116,7 @@ class TestSuite(unittest.TestCase):
         {"client_ids": {1: 2}, "date": "20.07.2017"},
         {"client_ids": ["1", "2"], "date": "20.07.2017"},
         {"client_ids": [1, 2], "date": "XXX"},
+        {"client_ids": ["1", "2", "10", "25"], "date": "22.03.1996"},
     ])
     def test_invalid_interests_request(self, arguments):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "clients_interests", "arguments": arguments}

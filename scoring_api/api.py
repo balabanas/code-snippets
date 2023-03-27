@@ -12,7 +12,7 @@ from typing import Union
 
 from scoring_api.scoring import get_interests, get_score
 
-SALT = "Otus"
+SALT = "somestring"
 ADMIN_LOGIN = "admin"
 ADMIN_SALT = "42"
 OK = 200
@@ -206,11 +206,11 @@ class ClientsInterestsRequest(BaseRequest):
             self.client_ids = params.get('client_ids', None)
             self.date = params.get('date', None)
         except (TypeError, AttributeError) as e:
-            self.response = {"error": e}
+            self.response = e.args[0]
             self.code = INVALID_REQUEST
             return False
         if self.client_ids is None:
-            self.response = {"error": "No valid client_ids were requested"}
+            self.response = "No valid client_ids were requested"
             self.code = INVALID_REQUEST
             return False
         return True
@@ -241,13 +241,13 @@ class OnlineScoreRequest(BaseRequest):
             self.birthday = params.get('birthday', None)
             self.gender = params.get('gender', None)
         except (TypeError, AttributeError) as e:
-            self.response = {"error": e}
+            self.response = e.args[0]
             self.code = INVALID_REQUEST
             return False
         if not (self.phone and self.email
                 or self.first_name and self.last_name
                 or self.gender is not None and self.birthday):
-            self.response = {"error": "No valid pair of arguments found"}
+            self.response = "No valid pair of arguments found"
             self.code = INVALID_REQUEST
             return False
         return True
@@ -282,9 +282,11 @@ class MethodRequest(BaseRequest):
         else:
             msg = self.account + self.login + SALT
             digest = hashlib.sha512(msg.encode()).hexdigest()
+            logging.info('msg: ' + msg)
+            logging.info('digest (token): ' + digest)
         if digest == self.token:
             return True
-        self.response = '{"error": "Forbidden"}'
+        self.response = "Forbidden"
         self.code = FORBIDDEN
         return False
 
@@ -297,7 +299,7 @@ class MethodRequest(BaseRequest):
             self.arguments = params.get('arguments', None)
             self.method = params.get('method', None)
         except TypeError as e:
-            self.response = {"error": e}
+            self.response = e.args[0]
             self.code = INVALID_REQUEST
             return False
         return True
