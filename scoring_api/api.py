@@ -370,8 +370,8 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--port', type=int, default=8080)
-    parser.add_argument('-l', '--log', type=str, default=None, const='./config.ini', nargs='?', help='Path to a config file')
+    parser.add_argument('-p', '--port', type=int, default=8080, help="Port to run the API on")
+    parser.add_argument('-l', '--log', type=str, default='log.txt', help="Path to a log file")
     args: argparse.Namespace = parser.parse_args()
     logging.basicConfig(filename=args.log, level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
