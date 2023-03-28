@@ -48,11 +48,11 @@ class FieldValidationMeta(type):
                 return k
 
     @classmethod
-    def validate_required_null(mcs, instance, field, value):
+    def validate_nullable(mcs, instance, field, value):
         if not field.nullable and value is None:
-            raise TypeError(f"Field {mcs.get_name(instance, field)} can't be Null. Got: {value}")
-        if field.required and value is None:
-            raise TypeError(f"Field {mcs.get_name(instance, field)} is required. Got: {value}")
+            raise TypeError(f"Field {mcs.get_name(instance, field)} is not nullable. Got: {value}")
+        # if field.required and value is None:
+        #     raise TypeError(f"Field {mcs.get_name(instance, field)} is required. Got: {value}")
 
 
 class CharField(metaclass=FieldValidationMeta):
@@ -61,15 +61,23 @@ class CharField(metaclass=FieldValidationMeta):
         self.required = required
         self.nullable = nullable
 
+    def __set_name__(self, owner, name):
+        self.name = '_' + name
+
     def __set__(self, instance, value):
-        type(self).validate_required_null(instance, self, value)
+        type(self).validate_nullable(instance, self, value)
         ornone = " or None" if self.nullable else ''
         if not isinstance(value, str) and not value is None:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects string{ornone}. Got: {value}")
-        self.value: Union[str, None] = value
+        # self.value: Union[str, None] = value
+        # instance.__dict__[self]: Union[str, None] = value
+        setattr(instance, self.name, value)
+        pass
 
-    def __get__(self, instance, value):
-        return self.value
+    def __get__(self, instance, owner):
+        return getattr(instance, self.name)
+        # return self.value
+        # return instance.__dict__[self]
 
 
 class ArgumentsField(metaclass=FieldValidationMeta):
@@ -78,12 +86,19 @@ class ArgumentsField(metaclass=FieldValidationMeta):
         self.required = required
         self.nullable = nullable
 
-    def __set__(self, instance, value):
-        type(self).validate_required_null(instance, self, value)
-        self.value: Union[dict, None] = value
+    def __set_name__(self, owner, name):
+        self.name = '_' + name
 
-    def __get__(self, instance, value):
-        return self.value
+    def __set__(self, instance, value):
+        type(self).validate_nullable(instance, self, value)
+        setattr(instance, self.name, value)
+        # self.value: Union[dict, None] = value
+        # instance.__dict__[self]: Union[dict, None] = value
+
+    def __get__(self, instance, owner):
+        return getattr(instance, self.name)
+        # return self.value
+        # return instance.__dict__[self]
 
 
 class EmailField(CharField):
@@ -94,13 +109,15 @@ class EmailField(CharField):
             pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if re.match(pattern, value) is None:
                 raise TypeError(f"Field {type(self).get_name(instance, self)} dose not meet e-mail format")
-        self.value = value
+        setattr(instance, self.name, value)
+        # self.value = value
+        # instance.__dict__[self] = value
 
 
 class PhoneField(CharField, metaclass=FieldValidationMeta):
     """Storage for phone argument, with validating descriptor"""
     def __set__(self, instance, value):
-        type(self).validate_required_null(instance, self, value)
+        type(self).validate_nullable(instance, self, value)
         if value:
             try:
                 int(value)
@@ -113,7 +130,9 @@ class PhoneField(CharField, metaclass=FieldValidationMeta):
             if len(str(value)) != 11:
                 raise TypeError(
                     f"Field {type(self).get_name(instance, self)} should have exactly 11 digits")
-        self.value = value
+        setattr(instance, self.name, value)
+        # self.value = value
+        # instance.__dict__[self] = value
 
 
 class DateField(metaclass=FieldValidationMeta):
@@ -122,8 +141,11 @@ class DateField(metaclass=FieldValidationMeta):
         self.required = required
         self.nullable = nullable
 
+    def __set_name__(self, owner, name):
+        self.name = '_' + name
+
     def __set__(self, instance, value):
-        type(self).validate_required_null(instance, self, value)
+        type(self).validate_nullable(instance, self, value)
         if value:
             try:
                 datetime.datetime.strptime(value, '%d.%m.%Y')
@@ -131,10 +153,14 @@ class DateField(metaclass=FieldValidationMeta):
                 raise TypeError(
                     f"Field {type(self).get_name(instance, self)} should be str formatted as dd.mm.yyyy"
                 )
-        self.value: Union[datetime.datetime, None] = value
+        setattr(instance, self.name, value)
+        # self.value: Union[datetime.datetime, None] = value
+        # instance.__dict__[self]: Union[datetime.datetime, None] = value
 
     def __get__(self, instance, value):
-        return self.value
+        getattr(instance, self.name)
+        # return self.value
+        # return instance.__dict__[self]
 
 
 class BirthDayField(DateField):
@@ -146,7 +172,9 @@ class BirthDayField(DateField):
             age = datetime.datetime.today() - date
             if age > datetime.timedelta(days=365 * 70):
                 raise TypeError(f"Field {type(self).get_name(instance, self)} should be < 70 years behind current date")
-        self.value = value
+        setattr(instance, self.name, value)
+        # self.value = value
+        # instance.__dict__[self] = value
 
 
 class GenderField(metaclass=FieldValidationMeta):
@@ -155,17 +183,24 @@ class GenderField(metaclass=FieldValidationMeta):
         self.required = required
         self.nullable = nullable
 
+    def __set_name__(self, owner, name):
+        self.name = '_' + name
+
     def __set__(self, instance, value):
-        type(self).validate_required_null(instance, self, value)
+        type(self).validate_nullable(instance, self, value)
         ornone = " or None" if self.nullable else ''
         if not isinstance(value, int) and value is not None:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects int{ornone}. Got: {value}")
         if isinstance(value, int) and value not in [0, 1, 2]:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects int values of {ornone}. Got: {value}")
-        self.value: Union[int, None] = value
+        setattr(instance, self.name, value)
+        # self.value: Union[int, None] = value
+        # instance.__dict__[self]: Union[int, None] = value
 
     def __get__(self, instance, value):
-        return self.value
+        return getattr(instance, self.name)
+        # return self.value
+        # return instance.__dict__[self]
 
 
 class ClientIDsField(metaclass=FieldValidationMeta):
@@ -174,8 +209,11 @@ class ClientIDsField(metaclass=FieldValidationMeta):
         self.required = required
         self.nullable = nullable
 
+    def __set_name__(self, owner, name):
+        self.name = '_' + name
+
     def __set__(self, instance, value):
-        type(self).validate_required_null(instance, self, value)
+        type(self).validate_nullable(instance, self, value)
         ornone = " or None" if self.nullable else ''
         if not isinstance(value, list) and value is not None:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects list{ornone}. Got: {value}")
@@ -186,39 +224,83 @@ class ClientIDsField(metaclass=FieldValidationMeta):
             for el in value:
                 if not isinstance(el, int):
                     raise TypeError(f"Field {type(self).get_name(instance, self)} expects ints in a list. Got: {value}")
-        self.value: list = value
+        setattr(instance, self.name, value)
+        # self.value: list = value
+        # instance.__dict__[self]: Union[list, None] = value
 
     def __get__(self, instance, value):
-        return self.value
+        return getattr(instance, self.name)
+        # return self.value
+        # return instance.__dict__[self]
 
 
-class BaseRequest:
+class CollectFieldsMeta(type):
+    """Collects *Field-class attributes of a Class, as defined in `field_classes`,
+    into a list, available as an attribute of a Class instance. Affords easy iteration over
+    attributes (in fact, Fields excpected in a request, which might differ from Class to a Class)"""
+    field_classes = (CharField, DateField, GenderField, ArgumentsField, ClientIDsField)
+
+    def __new__(mcs, name, bases, attrs):
+        request_fields = []
+        for attr_name, attr_value in attrs.items():
+            if isinstance(attr_value, mcs.field_classes):
+                request_fields.append(attr_name)
+        attrs['request_fields'] = request_fields
+        return super().__new__(mcs, name, bases, attrs)
+
+    # def __init__(cls, name, bases, attrs):
+    #     super().__init__(name, bases, attrs)
+    #     cls.response: str = ""
+    #     cls.code: int = OK
+
+
+class BaseRequest(metaclass=CollectFieldsMeta):
     """Parent class that defines response and code attributes, and initialize class internalizing request, context and
      store number"""
-    response = {}
-    code = OK
 
     def __init__(self, request, ctx, store):
+        self.response: Union[str, dict] = {}
+        self.code: int = OK
         self.request = request
         self.ctx = ctx
         self.store = store
+
+    def validate_required(self):
+        for f in self.request_fields:
+            if self.__class__.__dict__[f].required:
+                try:
+                    getattr(self, f'_{f}')  # not hasattr(self.__class__.__dict__[f], 'value'):
+                except AttributeError:
+                    self.response = f"Field {f} is required!"
+                    self.code = INVALID_REQUEST
+                    raise False  # TypeError(self.response)
+
+        return True
+
+
+
+
 
 
 class ClientsInterestsRequest(BaseRequest):
     """Defines clients-interests scoring arguments, parses argument's dictionary and assign values,
         implements methods to validate fields, call scoring function and return response"""
+
     client_ids = ClientIDsField(required=True)
     date = DateField(required=False, nullable=True)
 
     def _validate_params(self):
         try:
-            params: dict = self.request['body']['arguments']
-            self.client_ids = params.get('client_ids', None)
-            self.date = params.get('date', None)
+            body = self.request['body']
+            for attr_name in self.request_fields:
+                if 'arguments' in body and attr_name in body['arguments']:
+                    setattr(self, attr_name, body['arguments'][attr_name])
+            self.validate_required()  # after setting attributes, let's check if all required were set
         except TypeError as e:
             self.response = e.args[0]
             self.code = INVALID_REQUEST
             return False
+
         if self.client_ids is None:
             self.response = "No valid client_ids were requested"
             self.code = INVALID_REQUEST
@@ -233,9 +315,10 @@ class ClientsInterestsRequest(BaseRequest):
         return self.response, self.code
 
 
-class OnlineScoreRequest(BaseRequest):
+class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
     """Defines online-score scoring arguments, parses argument's dictionary and assign values,
         implements methods to validate fields, call scoring function and return response"""
+
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
     email = EmailField(required=False, nullable=True)
@@ -245,13 +328,11 @@ class OnlineScoreRequest(BaseRequest):
 
     def _validate_params(self):
         try:
-            params: dict = self.request['body']['arguments']
-            self.first_name = params.get('first_name', None)
-            self.last_name = params.get('last_name', None)
-            self.email = params.get('email', None)
-            self.phone = params.get('phone', None)
-            self.birthday = params.get('birthday', None)
-            self.gender = params.get('gender', None)
+            body = self.request['body']
+            for attr_name in self.request_fields:
+                if 'arguments' in body and attr_name in body['arguments']:
+                    setattr(self, attr_name, body['arguments'][attr_name])
+            self.validate_required()  # after setting attributes, let's check if all required were set
         except TypeError as e:
             self.response = e.args[0]
             self.code = INVALID_REQUEST
@@ -266,17 +347,14 @@ class OnlineScoreRequest(BaseRequest):
 
     def process_request(self):
         if self._validate_params():
-            params_list = ['phone', 'email', 'birthday', 'gender', 'first_name', 'last_name']
-            params_vals = [self.phone, self.email, self.birthday, self.gender, self.first_name, self.last_name]
-            params = zip(params_list, params_vals)
-            score = get_score(self.store, *params_vals)
+            score = get_score(self.store, *self.request_fields)
             self.response = {'score': score}
-            self.ctx['has'] = [f for f, v in params if v is not None]
+            self.ctx['has'] = [f for f in self.request_fields if getattr(self, f) is not None]
             self.code = OK
         return self.response, self.code
 
 
-class MethodRequest(BaseRequest):
+class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
     """Defines request fields, parses request body and assign values,
     implements methods to check if user is admin, if it is authenticated,
     fields validation, and request routing, depending on scoring method passed"""
@@ -304,13 +382,12 @@ class MethodRequest(BaseRequest):
         return False
 
     def _validate_params(self):
-        params: dict = self.request['body']
         try:
-            self.account = params.get('account', None)
-            self.login = params.get('login', None)
-            self.token = params.get('token', None)
-            self.arguments = params.get('arguments', None)
-            self.method = params.get('method', None)
+            body = self.request['body']
+            for attr_name in self.request_fields:
+                if attr_name in body:
+                    setattr(self, attr_name, body[attr_name])
+            self.validate_required()
         except TypeError as e:
             self.response = e.args[0]
             self.code = INVALID_REQUEST
