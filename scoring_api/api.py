@@ -51,8 +51,6 @@ class FieldValidationMeta(type):
     def validate_nullable(mcs, instance, field, value):
         if not field.nullable and value is None:
             raise TypeError(f"Field {mcs.get_name(instance, field)} is not nullable. Got: {value}")
-        # if field.required and value is None:
-        #     raise TypeError(f"Field {mcs.get_name(instance, field)} is required. Got: {value}")
 
 
 class CharField(metaclass=FieldValidationMeta):
@@ -69,15 +67,11 @@ class CharField(metaclass=FieldValidationMeta):
         ornone = " or None" if self.nullable else ''
         if not isinstance(value, str) and not value is None:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects string{ornone}. Got: {value}")
-        # self.value: Union[str, None] = value
-        # instance.__dict__[self]: Union[str, None] = value
         setattr(instance, self.name, value)
         pass
 
     def __get__(self, instance, owner):
         return getattr(instance, self.name)
-        # return self.value
-        # return instance.__dict__[self]
 
 
 class ArgumentsField(metaclass=FieldValidationMeta):
@@ -92,13 +86,9 @@ class ArgumentsField(metaclass=FieldValidationMeta):
     def __set__(self, instance, value):
         type(self).validate_nullable(instance, self, value)
         setattr(instance, self.name, value)
-        # self.value: Union[dict, None] = value
-        # instance.__dict__[self]: Union[dict, None] = value
 
     def __get__(self, instance, owner):
         return getattr(instance, self.name)
-        # return self.value
-        # return instance.__dict__[self]
 
 
 class EmailField(CharField):
@@ -110,8 +100,6 @@ class EmailField(CharField):
             if re.match(pattern, value) is None:
                 raise TypeError(f"Field {type(self).get_name(instance, self)} dose not meet e-mail format")
         setattr(instance, self.name, value)
-        # self.value = value
-        # instance.__dict__[self] = value
 
 
 class PhoneField(CharField, metaclass=FieldValidationMeta):
@@ -131,8 +119,6 @@ class PhoneField(CharField, metaclass=FieldValidationMeta):
                 raise TypeError(
                     f"Field {type(self).get_name(instance, self)} should have exactly 11 digits")
         setattr(instance, self.name, value)
-        # self.value = value
-        # instance.__dict__[self] = value
 
 
 class DateField(metaclass=FieldValidationMeta):
@@ -154,13 +140,9 @@ class DateField(metaclass=FieldValidationMeta):
                     f"Field {type(self).get_name(instance, self)} should be str formatted as dd.mm.yyyy"
                 )
         setattr(instance, self.name, value)
-        # self.value: Union[datetime.datetime, None] = value
-        # instance.__dict__[self]: Union[datetime.datetime, None] = value
 
     def __get__(self, instance, value):
         getattr(instance, self.name)
-        # return self.value
-        # return instance.__dict__[self]
 
 
 class BirthDayField(DateField):
@@ -173,8 +155,6 @@ class BirthDayField(DateField):
             if age > datetime.timedelta(days=365 * 70):
                 raise TypeError(f"Field {type(self).get_name(instance, self)} should be < 70 years behind current date")
         setattr(instance, self.name, value)
-        # self.value = value
-        # instance.__dict__[self] = value
 
 
 class GenderField(metaclass=FieldValidationMeta):
@@ -194,13 +174,9 @@ class GenderField(metaclass=FieldValidationMeta):
         if isinstance(value, int) and value not in [0, 1, 2]:
             raise TypeError(f"Field {type(self).get_name(instance, self)} expects int values of {ornone}. Got: {value}")
         setattr(instance, self.name, value)
-        # self.value: Union[int, None] = value
-        # instance.__dict__[self]: Union[int, None] = value
 
     def __get__(self, instance, value):
         return getattr(instance, self.name)
-        # return self.value
-        # return instance.__dict__[self]
 
 
 class ClientIDsField(metaclass=FieldValidationMeta):
@@ -225,13 +201,9 @@ class ClientIDsField(metaclass=FieldValidationMeta):
                 if not isinstance(el, int):
                     raise TypeError(f"Field {type(self).get_name(instance, self)} expects ints in a list. Got: {value}")
         setattr(instance, self.name, value)
-        # self.value: list = value
-        # instance.__dict__[self]: Union[list, None] = value
 
     def __get__(self, instance, value):
         return getattr(instance, self.name)
-        # return self.value
-        # return instance.__dict__[self]
 
 
 class CollectFieldsMeta(type):
@@ -247,11 +219,6 @@ class CollectFieldsMeta(type):
                 request_fields.append(attr_name)
         attrs['request_fields'] = request_fields
         return super().__new__(mcs, name, bases, attrs)
-
-    # def __init__(cls, name, bases, attrs):
-    #     super().__init__(name, bases, attrs)
-    #     cls.response: str = ""
-    #     cls.code: int = OK
 
 
 class BaseRequest(metaclass=CollectFieldsMeta):
@@ -269,11 +236,11 @@ class BaseRequest(metaclass=CollectFieldsMeta):
         for f in self.request_fields:
             if self.__class__.__dict__[f].required:
                 try:
-                    getattr(self, f'_{f}')  # not hasattr(self.__class__.__dict__[f], 'value'):
+                    getattr(self, f'_{f}')
                 except AttributeError:
                     self.response = f"Field {f} is required!"
                     self.code = INVALID_REQUEST
-                    raise False  # TypeError(self.response)
+                    raise False
         return True
 
 
@@ -335,10 +302,6 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
         if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
             or all(f'_{f}' in self.__dict__ for f in ('first_name', 'last_name'))
             or all(f'_{f}' in self.__dict__ for f in ('gender', 'birthday'))):
-                # self.phone and self.email
-                #
-                # or self.first_name and self.last_name
-                # or self.gender is not None and self.birthday):
             self.response = "No valid pair of arguments found"
             self.code = INVALID_REQUEST
             return False
