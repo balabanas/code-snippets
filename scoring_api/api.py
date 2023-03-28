@@ -274,12 +274,7 @@ class BaseRequest(metaclass=CollectFieldsMeta):
                     self.response = f"Field {f} is required!"
                     self.code = INVALID_REQUEST
                     raise False  # TypeError(self.response)
-
         return True
-
-
-
-
 
 
 class ClientsInterestsRequest(BaseRequest):
@@ -337,9 +332,13 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
             self.response = e.args[0]
             self.code = INVALID_REQUEST
             return False
-        if not (self.phone and self.email
-                or self.first_name and self.last_name
-                or self.gender is not None and self.birthday):
+        if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
+            or all(f'_{f}' in self.__dict__ for f in ('first_name', 'last_name'))
+            or all(f'_{f}' in self.__dict__ for f in ('gender', 'birthday'))):
+                # self.phone and self.email
+                #
+                # or self.first_name and self.last_name
+                # or self.gender is not None and self.birthday):
             self.response = "No valid pair of arguments found"
             self.code = INVALID_REQUEST
             return False
@@ -349,7 +348,7 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
         if self._validate_params():
             score = get_score(self.store, *self.request_fields)
             self.response = {'score': score}
-            self.ctx['has'] = [f for f in self.request_fields if getattr(self, f) is not None]
+            self.ctx['has'] = [f for f in self.request_fields if f'_{f}' in self.__dict__]
             self.code = OK
         return self.response, self.code
 
