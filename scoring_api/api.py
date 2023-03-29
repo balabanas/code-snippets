@@ -169,7 +169,6 @@ class BaseRequest(metaclass=CollectFieldsMeta):
     def __init__(self, params, ctx, store):
         self.response: Union[str, dict] = {}
         self.code: int = OK
-        # self.request = request
         self.params: dict = params
         self.ctx = ctx
         self.store = store
@@ -227,7 +226,10 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
         try:
             self._digest_params(self.params)
 
-            # some specific pairs of parameters in request should be defined for correct scoring
+            # Some specific pairs of parameters in request should be defined for correct scoring.
+            # NB! We check here not that parameters are not Null, but were they successfully set
+            # previously (taking into account `required` and `nullable` properties and other validation
+            # logic), or not.
             if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
                     or all(f'_{f}' in self.__dict__ for f in ('first_name', 'last_name'))
                     or all(f'_{f}' in self.__dict__ for f in ('gender', 'birthday'))):
