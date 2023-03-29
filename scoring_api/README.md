@@ -4,6 +4,13 @@ This is a demo of a simple scoring API. The method of scoring and arguments for 
 
 For demo purposes, parameters are passed as JSON dictionary inside  POST request.
 
+## Python Features Summary
+* Metaclasses
+* Data descriptors
+* Class inheritance
+* Factories
+* HTTPServer, POST requests, checking tokens
+
 ## Request Structure
 * `account` - string, optional can be empty
 * `login` - string, required, can be empty
