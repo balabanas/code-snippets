@@ -184,46 +184,26 @@ class BaseRequest(metaclass=CollectFieldsMeta):
                     raise TypeError(f"Field {f} is required!")
         return True
 
-    def _digest_params(self):
-        try:
-            body = self.request['body']
-            for attr_name in self.request_fields:  # first, set attributes
-                if 'arguments' in body and attr_name in body['arguments']:
-                    setattr(self, attr_name, body['arguments'][attr_name])
-            self._validate_required_fields()  # then check if all required were set
-        except TypeError as e:
-            self.response, self.code = e.args[0], INVALID_REQUEST
-            return False
+    def _digest_params(self, params: dict) -> None:
+        for attr_name in self.request_fields:  # first, set attributes
+            if attr_name in params:
+                setattr(self, attr_name, params[attr_name])
+        self._validate_required_fields()  # then check if all required were set
 
 
 class ClientsInterestsRequest(BaseRequest):
     """Defines clients-interests scoring arguments, parses argument's dictionary and assign values,
         implements methods to validate fields, call scoring function and return response"""
-    client_ids = ClientIDsField(required=True)
+    client_ids = ClientIDsField(required=True, nullable=False)
     date = DateField(required=False, nullable=True)
 
-    def _validate_params(self):
+    def process_request(self):
         try:
-            body = self.request['body']
-            for attr_name in self.request_fields:
-                if 'arguments' in body and attr_name in body['arguments']:
-                    setattr(self, attr_name, body['arguments'][attr_name])
-            self._validate_required_fields()  # after setting attributes, let's check if all required were set
+            self._digest_params(self.request['body']['arguments'])
+            self.ctx['nclients'] = len(self.client_ids)
+            self.response, self.code = {f'{i}': get_interests(1, i) for i in self.client_ids}, OK
         except TypeError as e:
             self.response, self.code = e.args[0], INVALID_REQUEST
-            return False
-
-        if self.client_ids is None:
-            self.response = "No valid client_ids were requested"
-            self.code = INVALID_REQUEST
-            return False
-        return True
-
-    def process_request(self):
-        if self._validate_params():
-            self.response = {f'{i}': get_interests(1, i) for i in self.client_ids}
-            self.ctx['nclients'] = len(self.client_ids)
-            self.code = OK
         return self.response, self.code
 
 
@@ -237,32 +217,23 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
     birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
-    def _validate_params(self):
-        try:
-            body = self.request['body']
-            for attr_name in self.request_fields:
-                if 'arguments' in body and attr_name in body['arguments']:
-                    setattr(self, attr_name, body['arguments'][attr_name])
-            self._validate_required_fields()  # after setting attributes, let's check if all required were set
-        except TypeError as e:
-            self.response, self.code = e.args[0], INVALID_REQUEST
-            return False
-        if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
-                or all(f'_{f}' in self.__dict__ for f in ('first_name', 'last_name'))
-                or all(f'_{f}' in self.__dict__ for f in ('gender', 'birthday'))):
-            self.response = "No valid pair of arguments found"
-            self.code = INVALID_REQUEST
-            return False
-        return True
-
     def process_request(self):
-        if self._validate_params():
+        try:
+            self._digest_params(self.request['body']['arguments'])
+
+            # some specific pairs of parameters in request should be defined for correct scoring
+            if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
+                    or all(f'_{f}' in self.__dict__ for f in ('first_name', 'last_name'))
+                    or all(f'_{f}' in self.__dict__ for f in ('gender', 'birthday'))):
+                raise TypeError("No valid pair of arguments found")
+
             request_fields_vals = {f: getattr(self, f) if f'_{f}' in self.__dict__ else None for f in
                                    self.request_fields}
             score = get_score(self.store, **request_fields_vals)
-            self.response = {'score': score}
             self.ctx['has'] = [f for f in self.request_fields if f'_{f}' in self.__dict__]
-            self.code = OK
+            self.response, self.code = {'score': score}, OK
+        except TypeError as e:
+            self.response, self.code = e.args[0], INVALID_REQUEST
         return self.response, self.code
 
 
@@ -289,34 +260,26 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
             digest = hashlib.sha512(msg.encode()).hexdigest()
         if digest == self.token:
             return True
-        self.response = "Forbidden"
-        self.code = FORBIDDEN
         return False
 
-    def _validate_params(self):
-        try:
-            body = self.request['body']
-            for attr_name in self.request_fields:
-                if attr_name in body:
-                    setattr(self, attr_name, body[attr_name])
-            self._validate_required_fields()
-        except TypeError as e:
-            self.response, self.code = e.args[0], INVALID_REQUEST
-            return False
-        return True
-
     def process_request(self):
-        if self._validate_params() and self.check_auth():
-            if self.is_admin:
-                self.response, self.code = {"score": 42}, OK
-                return self.response, self.code
-
+        try:
+            self._digest_params(self.request['body'])
+            if self.check_auth():
+                if self.is_admin:
+                    self.response, self.code = {"score": 42}, OK
+                    return self.response, self.code
+            else:
+                self.response, self.code = "Forbidden", FORBIDDEN
+                return self.response, self.code  # auth failed
             if self.method == 'online_score':
                 osr = OnlineScoreRequest(self.request, self.ctx, self.store)
                 self.response, self.code = osr.process_request()
             elif self.method == 'clients_interests':
                 cir = ClientsInterestsRequest(self.request, self.ctx, self.store)
                 self.response, self.code = cir.process_request()
+        except TypeError as e:
+            self.response, self.code = e.args[0], INVALID_REQUEST
         return self.response, self.code
 
 
