@@ -39,8 +39,7 @@ GENDERS = {
 
 
 class BaseField:
-    """Metaclass, implementing methods to pull attributes name out of instances during validation,
-    and also method for basic validation of `required` and `nullable` properties"""
+    """Field general class, with descriptors and validation for Null"""
     def __init__(self, required=False, nullable=False):
         self.required = required
         self.nullable = nullable
@@ -51,25 +50,18 @@ class BaseField:
     def __get__(self, instance, owner):
         return getattr(instance, self.name)
 
-    # @staticmethod
-    # def _get_name(instance, field):
-    #     for k, v in type(instance).__dict__.items():
-    #         if v is field:
-    #             return k
-
     @staticmethod
     def validate_nullable(field, value):
         if not field.nullable and value is None:
-            raise TypeError(f"Field {field.name[1:]} is not nullable. Got: {value}")
+            raise TypeError(f"Field {field.name[1:]} is not nullable.")
 
 
 class CharField(BaseField):
     """Storage for general char arguments, with validating descriptor"""
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
-        ornone = " or None" if self.nullable else ''
-        if not isinstance(value, str) and value is not None:
-            raise TypeError(f"Field {self.name[1:]} expects string{ornone}. Got: {value}")
+        if not isinstance(value, (str, type(None))):
+            raise TypeError(f"If being set, field {self.name[1:]} expects string. Got: {type(value)}")
         setattr(instance, self.name, value)
 
 
@@ -77,6 +69,8 @@ class ArgumentsField(BaseField):
     """Storage for arguments dict, with validating descriptor"""
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
+        if not isinstance(value, (dict, type(None))):
+            raise TypeError(f"If being set, field {self.name[1:]} expects to be dict. Got: {type(value)}")
         setattr(instance, self.name, value)
 
 
@@ -84,19 +78,17 @@ class EmailField(CharField):
     """Storage for email argument, with validating descriptor"""
     def __set__(self, instance, value):
         super().__set__(instance, value)
-        if value is not None:
+        if value:
             pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if re.match(pattern, value) is None:
                 raise TypeError(f"Field {self.name[1:]} dose not meet e-mail format")
-        # setattr(instance, self.name, value)
 
 
 class PhoneField(BaseField):
     """Storage for phone argument, with validating descriptor"""
     def __set__(self, instance, value):
-        # super().__set__(instance, value)
         self.validate_nullable(self, value)
-        if value:  # value was already set by super method, take it
+        if value:
             if str(value)[0] != '7':
                 raise TypeError(
                     f"Field {self.name[1:]} should start with 7")
@@ -113,11 +105,9 @@ class DateField(BaseField):
         if value:
             try:
                 date = datetime.datetime.strptime(value, '%d.%m.%Y')
+                setattr(instance, self.name, date)
             except ValueError:
-                raise TypeError(
-                    f"Field {self.name[1:]} should be str formatted as dd.mm.yyyy"
-                )
-        setattr(instance, self.name, date)
+                raise TypeError(f"Field {self.name[1:]} should be a str formatted as dd.mm.yyyy. Got: {value}")
 
 
 class BirthDayField(DateField):
@@ -135,14 +125,10 @@ class GenderField(BaseField):
     """Storage for gender argument, with validating descriptor"""
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
-        if value and not isinstance(value, (int, float)):
-            raise TypeError(f"If specified, field {self.name[1:]} should be a number")
-        ornone = " or None" if self.nullable else ''
-        # if not isinstance(value, int) and value is not None:
-        #     raise TypeError(f"Field {self._get_name(instance, self)} expects int{ornone}. Got: {value}")
-        if value not in [0, 1, 2]:
-            raise TypeError(f"Field {self.name[1:]} expects int values of {ornone}. Got: {value}")
-        # pass
+        if not isinstance(value, (int, float, type(None))):
+            raise TypeError(f"If being set, {self.name[1:]} should be a number")
+        if value and value not in [0, 1, 2]:
+            raise TypeError(f"If being set, {self.name[1:]} expects one of {{0, 1, 2}}. Got: {value}")
         setattr(instance, self.name, value)
 
 
@@ -150,23 +136,22 @@ class ClientIDsField(BaseField):
     """Storage for client IDs list, with validating descriptor"""
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
-        ornone = " or None" if self.nullable else ''
-        if not isinstance(value, list) and value is not None:
-            raise TypeError(f"Field {self.name[1:]} expects list{ornone}. Got: {value}")
+        if not isinstance(value, (list, type(None))):
+            raise TypeError(f"If being set, {self.name[1:]} expects list. Got: {type(value)}")
         elif isinstance(value, list):
             if len(value) == 0:
                 raise TypeError(f"Field {self.name[1:]} expects non-empty list. Got: {value}")
         if value:
             for el in value:
-                if not isinstance(el, int):
-                    raise TypeError(f"Field {self.name[1:]} expects ints in a list. Got: {value}")
+                if not isinstance(el, (int, float)):
+                    raise TypeError(f"Field {self.name[1:]} expects numbers in a list. Got: {type(el)}")
         setattr(instance, self.name, value)
 
 
 class CollectFieldsMeta(type):
     """Collects *Field-class attributes of a Class, as defined in `field_classes`,
     into a list, available as an attribute of a Class instance. Affords easy iteration over
-    attributes (in fact, Fields excpected in a request, which might differ from Class to a Class)"""
+    attributes (Fields that are expected in a request, differ from Class to a Class)"""
     field_classes = (CharField, DateField, PhoneField, GenderField, ArgumentsField, ClientIDsField)
 
     def __new__(mcs, name, bases, attrs):
@@ -181,7 +166,6 @@ class CollectFieldsMeta(type):
 class BaseRequest(metaclass=CollectFieldsMeta):
     """Parent class that defines response and code attributes, and initialize class internalizing request, context and
      store number"""
-
     def __init__(self, request, ctx, store):
         self.response: Union[str, dict] = {}
         self.code: int = OK
@@ -189,22 +173,32 @@ class BaseRequest(metaclass=CollectFieldsMeta):
         self.ctx = ctx
         self.store = store
 
-    def validate_required(self):
+    def _validate_required_fields(self):
+        """Cycle through the fields defined in a Request class, and make sure if all of them
+        that marked `required` are set from the request"""
         for f in self.request_fields:
             if self.__class__.__dict__[f].required:
                 try:
                     getattr(self, f'_{f}')
                 except AttributeError:
-                    self.response = f"Field {f} is required!"
-                    self.code = INVALID_REQUEST
-                    raise False
+                    raise TypeError(f"Field {f} is required!")
         return True
+
+    def _digest_params(self):
+        try:
+            body = self.request['body']
+            for attr_name in self.request_fields:  # first, set attributes
+                if 'arguments' in body and attr_name in body['arguments']:
+                    setattr(self, attr_name, body['arguments'][attr_name])
+            self._validate_required_fields()  # then check if all required were set
+        except TypeError as e:
+            self.response, self.code = e.args[0], INVALID_REQUEST
+            return False
 
 
 class ClientsInterestsRequest(BaseRequest):
     """Defines clients-interests scoring arguments, parses argument's dictionary and assign values,
         implements methods to validate fields, call scoring function and return response"""
-
     client_ids = ClientIDsField(required=True)
     date = DateField(required=False, nullable=True)
 
@@ -214,10 +208,9 @@ class ClientsInterestsRequest(BaseRequest):
             for attr_name in self.request_fields:
                 if 'arguments' in body and attr_name in body['arguments']:
                     setattr(self, attr_name, body['arguments'][attr_name])
-            self.validate_required()  # after setting attributes, let's check if all required were set
+            self._validate_required_fields()  # after setting attributes, let's check if all required were set
         except TypeError as e:
-            self.response = e.args[0]
-            self.code = INVALID_REQUEST
+            self.response, self.code = e.args[0], INVALID_REQUEST
             return False
 
         if self.client_ids is None:
@@ -237,7 +230,6 @@ class ClientsInterestsRequest(BaseRequest):
 class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
     """Defines online-score scoring arguments, parses argument's dictionary and assign values,
         implements methods to validate fields, call scoring function and return response"""
-
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
     email = EmailField(required=False, nullable=True)
@@ -251,10 +243,9 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
             for attr_name in self.request_fields:
                 if 'arguments' in body and attr_name in body['arguments']:
                     setattr(self, attr_name, body['arguments'][attr_name])
-            self.validate_required()  # after setting attributes, let's check if all required were set
+            self._validate_required_fields()  # after setting attributes, let's check if all required were set
         except TypeError as e:
-            self.response = e.args[0]
-            self.code = INVALID_REQUEST
+            self.response, self.code = e.args[0], INVALID_REQUEST
             return False
         if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
                 or all(f'_{f}' in self.__dict__ for f in ('first_name', 'last_name'))
@@ -268,7 +259,6 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
         if self._validate_params():
             request_fields_vals = {f: getattr(self, f) if f'_{f}' in self.__dict__ else None for f in
                                    self.request_fields}
-            print(request_fields_vals)
             score = get_score(self.store, **request_fields_vals)
             self.response = {'score': score}
             self.ctx['has'] = [f for f in self.request_fields if f'_{f}' in self.__dict__]
@@ -309,18 +299,16 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
             for attr_name in self.request_fields:
                 if attr_name in body:
                     setattr(self, attr_name, body[attr_name])
-            self.validate_required()
+            self._validate_required_fields()
         except TypeError as e:
-            self.response = e.args[0]
-            self.code = INVALID_REQUEST
+            self.response, self.code = e.args[0], INVALID_REQUEST
             return False
         return True
 
     def process_request(self):
         if self._validate_params() and self.check_auth():
             if self.is_admin:
-                self.response = {"score": 42}
-                self.code = OK
+                self.response, self.code = {"score": 42}, OK
                 return self.response, self.code
 
             if self.method == 'online_score':
