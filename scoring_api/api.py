@@ -166,10 +166,11 @@ class CollectFieldsMeta(type):
 class BaseRequest(metaclass=CollectFieldsMeta):
     """Parent class that defines response and code attributes, and initialize class internalizing request, context and
      store number"""
-    def __init__(self, request, ctx, store):
+    def __init__(self, params, ctx, store):
         self.response: Union[str, dict] = {}
         self.code: int = OK
-        self.request = request
+        # self.request = request
+        self.params: dict = params
         self.ctx = ctx
         self.store = store
 
@@ -185,6 +186,8 @@ class BaseRequest(metaclass=CollectFieldsMeta):
         return True
 
     def _digest_params(self, params: dict) -> None:
+        """Sets params, specified in the request class, from params dict and checks that all required fields
+        were set"""
         for attr_name in self.request_fields:  # first, set attributes
             if attr_name in params:
                 setattr(self, attr_name, params[attr_name])
@@ -199,7 +202,7 @@ class ClientsInterestsRequest(BaseRequest):
 
     def process_request(self):
         try:
-            self._digest_params(self.request['body']['arguments'])
+            self._digest_params(self.params)
             self.ctx['nclients'] = len(self.client_ids)
             self.response, self.code = {f'{i}': get_interests(1, i) for i in self.client_ids}, OK
         except TypeError as e:
@@ -219,7 +222,7 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
 
     def process_request(self):
         try:
-            self._digest_params(self.request['body']['arguments'])
+            self._digest_params(self.params)
 
             # some specific pairs of parameters in request should be defined for correct scoring
             if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
@@ -264,7 +267,7 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
 
     def process_request(self):
         try:
-            self._digest_params(self.request['body'])
+            self._digest_params(self.params)
             if self.check_auth():
                 if self.is_admin:
                     self.response, self.code = {"score": 42}, OK
@@ -273,10 +276,10 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
                 self.response, self.code = "Forbidden", FORBIDDEN
                 return self.response, self.code  # auth failed
             if self.method == 'online_score':
-                osr = OnlineScoreRequest(self.request, self.ctx, self.store)
+                osr = OnlineScoreRequest(self.arguments, self.ctx, self.store)
                 self.response, self.code = osr.process_request()
             elif self.method == 'clients_interests':
-                cir = ClientsInterestsRequest(self.request, self.ctx, self.store)
+                cir = ClientsInterestsRequest(self.arguments, self.ctx, self.store)
                 self.response, self.code = cir.process_request()
         except TypeError as e:
             self.response, self.code = e.args[0], INVALID_REQUEST
@@ -284,7 +287,8 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
 
 
 def method_handler(request, ctx, store):
-    r = MethodRequest(request, ctx, store)
+    params = request['body']
+    r = MethodRequest(params, ctx, store)
     response, code = r.process_request()
     return response, code
 
