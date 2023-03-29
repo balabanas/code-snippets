@@ -193,6 +193,9 @@ class BaseRequest(metaclass=CollectFieldsMeta):
                 setattr(self, attr_name, params[attr_name])
         self._validate_required_fields()  # then check if all required were set
 
+    def process_request(self):
+        return None, None
+
 
 class ClientsInterestsRequest(BaseRequest):
     """Defines clients-interests scoring arguments, parses argument's dictionary and assign values,
@@ -240,6 +243,19 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
         return self.response, self.code
 
 
+class MethodFactory:
+    """Choose a backend implementing method requested, and pass to the corresponding class
+    necessary parameters from `ba` (backend args) dict"""
+    @staticmethod
+    def get_method_backend(method: str, ba: dict) -> BaseRequest:
+        if method == 'online_score':
+            return OnlineScoreRequest(ba['arguments'], ba['ctx'], ba['store'])
+        elif method == 'clients_interests':
+            return ClientsInterestsRequest(ba['arguments'], ba['ctx'], ba['store'])
+        else:
+            raise TypeError('Unknown method')
+
+
 class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
     """Defines request fields, parses request body and assign values,
     implements methods to check if user is admin, if it is authenticated,
@@ -275,12 +291,11 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
             else:
                 self.response, self.code = "Forbidden", FORBIDDEN
                 return self.response, self.code  # auth failed
-            if self.method == 'online_score':
-                osr = OnlineScoreRequest(self.arguments, self.ctx, self.store)
-                self.response, self.code = osr.process_request()
-            elif self.method == 'clients_interests':
-                cir = ClientsInterestsRequest(self.arguments, self.ctx, self.store)
-                self.response, self.code = cir.process_request()
+
+            backend_args = {'arguments': self.arguments, 'ctx': self.ctx, 'store': self.store}
+            mb = MethodFactory().get_method_backend(self.method, backend_args)
+            self.response, self.code = mb.process_request()
+
         except TypeError as e:
             self.response, self.code = e.args[0], INVALID_REQUEST
         return self.response, self.code
