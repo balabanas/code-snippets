@@ -50,6 +50,7 @@ class TestSuite(unittest.TestCase):
 
     @cases([
         {"account": "horns&hoofs", "login": "h&f", "method": "online_score"},
+        {"account": "horns&hoofs", "login": "h&f", "method": None, "arguments": {"phone": "79175002040", "email": "stupnikovotus.ru"}},
         {"account": "horns&hoofs", "login": "h&f", "arguments": {}},
         {"account": "horns&hoofs", "method": "online_score", "arguments": {}},
     ])
