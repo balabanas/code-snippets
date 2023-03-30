@@ -78,3 +78,8 @@ Result:
 
 ###Run Tests
 * Make sure your currend dir is one level up of `scoring_api` dir, and run `python -m scoring_api.test`
+
+
++REDIS
+docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
+docker exec -it redis-stack-server redis-cli

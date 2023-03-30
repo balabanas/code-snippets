@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Union
 
 from scoring_api.scoring import get_interests, get_score
+from scoring_api.store import RedisStorage
 
 SALT = "somestring"
 ADMIN_LOGIN = "admin"
@@ -206,7 +207,7 @@ class ClientsInterestsRequest(BaseRequest):
         try:
             self._digest_params(self.params)
             self.ctx['nclients'] = len(self.client_ids)
-            self.response, self.code = {f'{i}': get_interests(1, i) for i in self.client_ids}, OK
+            self.response, self.code = {f'{i}': get_interests(self.store, i) for i in self.client_ids}, OK
         except TypeError as e:
             self.response, self.code = e.args[0], INVALID_REQUEST
         return self.response, self.code
@@ -316,6 +317,11 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     }
     store = None
 
+    def __init__(self, request, client_address, server, store=None):
+        print('Print store: ', store)
+        self.store = store
+        super().__init__(request, client_address, server)
+
     def get_request_id(self, headers):
         return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
 
@@ -361,10 +367,15 @@ if __name__ == "__main__":
     args: argparse.Namespace = parser.parse_args()
     logging.basicConfig(filename=args.log, level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
-    server = HTTPServer(("localhost", args.port), MainHTTPHandler)
+    rs = RedisStorage()
+    # server = HTTPServer(("localhost", args.port), MainHTTPHandler)
+    server = HTTPServer(("localhost", args.port), lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=rs))
     logging.info("Starting server at %s" % args.port)
     try:
+        rs.connect()
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        rs.close_connection()
     server.server_close()
