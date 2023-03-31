@@ -1,7 +1,9 @@
 import hashlib
 import datetime
 import functools
+import json
 import unittest
+from unittest.mock import Mock
 
 from scoring_api import api
 from scoring_api.store import RedisStorage
@@ -22,22 +24,27 @@ def cases(cases):
 
 class TestSuite(unittest.TestCase):
     def setUp(self):
-        self.rs = RedisStorage()
-        self.rs.connect()
-        client_interests_fixture: dict = {
-            'i:0': ["cars", "pets"],
-            'i:1': ["sport", "geek"],
-            'i:2': ["hi-tech", "sport"],
-            'i:3': ["cars", "pets"],
-        }
-        for k, v in client_interests_fixture.items():
-            self.rs.rpush(k, v)
+        # self.rs = RedisStorage()
+        # self.rs.connect()
+        # client_interests_fixture: dict = {
+        #     'i:0': ["cars", "pets"],
+        #     'i:1': ["sport", "geek"],
+        #     'i:2': ["hi-tech", "sport"],
+        #     'i:3': ["cars", "pets"],
+        # }
+        # for k, v in client_interests_fixture.items():
+        #     self.rs.rpush(k, v)
+        rs = Mock(spec=RedisStorage)
+        rs.get.return_value = json.dumps(['cars', 'pets'])
+        rs.cache_get.return_value = 3.0
+        # rs.cache_set
         self.context = {}
         self.headers = {}
-        self.settings = self.rs
+        self.settings = rs
 
     def tearDown(self) -> None:
-        self.rs.close_connection()
+        # self.rs.close_connection()
+        pass
 
     def get_response(self, request):
         return api.method_handler({"body": request, "headers": self.headers}, self.context, self.settings)
