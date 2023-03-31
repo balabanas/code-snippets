@@ -296,6 +296,7 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
                 return self.response, self.code  # auth failed
 
             backend_args = {'arguments': self.arguments, 'ctx': self.ctx, 'store': self.store}
+            print('self.store', self.store)
             mb = MethodFactory().get_method_backend(self.method, backend_args)
             self.response, self.code = mb.process_request()
 
@@ -305,6 +306,7 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
 
 
 def method_handler(request, ctx, store):
+    print('store in method handler: ', store)
     params = request['body']
     r = MethodRequest(params, ctx, store)
     response, code = r.process_request()

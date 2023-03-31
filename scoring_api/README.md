@@ -1,5 +1,7 @@
 # Scoring API
 
+TODO: test that cache is actually used if exists
+
 This is a demo of a simple scoring API. The method of scoring and arguments for them are passed in the request's body. The focus of the demo is not on API itself, but rather on request's parameters validation using classes.
 
 For demo purposes, parameters are passed as JSON dictionary inside  POST request.

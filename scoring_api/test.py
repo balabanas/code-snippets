@@ -4,6 +4,7 @@ import functools
 import unittest
 
 from scoring_api import api
+from scoring_api.store import RedisStorage
 
 
 def cases(cases):
@@ -21,9 +22,22 @@ def cases(cases):
 
 class TestSuite(unittest.TestCase):
     def setUp(self):
+        self.rs = RedisStorage()
+        self.rs.connect()
+        client_interests_fixture: dict = {
+            'i:0': ["cars", "pets"],
+            'i:1': ["sport", "geek"],
+            'i:2': ["hi-tech", "sport"],
+            'i:3': ["cars", "pets"],
+        }
+        for k, v in client_interests_fixture.items():
+            self.rs.rpush(k, v)
         self.context = {}
         self.headers = {}
-        self.settings = {}
+        self.settings = self.rs
+
+    def tearDown(self) -> None:
+        self.rs.close_connection()
 
     def get_response(self, request):
         return api.method_handler({"body": request, "headers": self.headers}, self.context, self.settings)
@@ -98,6 +112,7 @@ class TestSuite(unittest.TestCase):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
         self.set_valid_auth(request)
         response, code = self.get_response(request)
+        print(response)
         self.assertEqual(api.OK, code, arguments)
         score = response.get("score")
         self.assertTrue(isinstance(score, (int, float)) and score >= 0, arguments)
