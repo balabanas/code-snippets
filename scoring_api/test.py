@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock
 
 from scoring_api import api
-from scoring_api.store import RedisStorage
+from scoring_api import store  # RedisStorage
 
 
 def cases(cases):
@@ -22,6 +22,88 @@ def cases(cases):
     return decorator
 
 
+class CharFieldTest(unittest.TestCase):
+    def setUp(self):
+        class ClassWithFields:
+            nf_chf = api.CharField(required=False, nullable=True)
+            nnf_chf = api.CharField(required=False, nullable=False)
+            af = api.ArgumentsField(required=True, nullable=True)
+            ef = api.EmailField(required=True, nullable=True)
+            pf = api.PhoneField(required=True, nullable=True)
+            df = api.DateField(required=True, nullable=True)
+            bdf = api.BirthDayField(required=True, nullable=True)
+            gf = api.GenderField(required=True, nullable=True)
+            cif = api.ClientIDsField(required=True, nullable=True)
+        self.instance_with_fields = ClassWithFields()
+
+    def test_validate_nullable(self):  # this also tests descriptors and BaseField class
+        setattr(self.instance_with_fields, 'nf_chf', None)
+        self.assertEqual(None, getattr(self.instance_with_fields, 'nf_chf'))
+
+        setattr(self.instance_with_fields, 'nf_chf', 'something nf')
+        self.assertEqual('something nf', getattr(self.instance_with_fields, 'nf_chf'))
+
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'nnf_chf', None)
+
+        setattr(self.instance_with_fields, 'nnf_chf', 'something nnf')
+        self.assertEqual('something nnf', getattr(self.instance_with_fields, 'nnf_chf'))
+
+    def test_validate_char_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'nf_chf', 3)
+
+    def test_validate_arguments_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'af', 3)  # dict expected
+        setattr(self.instance_with_fields, 'af', {})
+        self.assertEqual({}, getattr(self.instance_with_fields, 'af'))
+
+    def test_validate_email_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'ef', 'ds @motw.net')  # invalid email
+        setattr(self.instance_with_fields, 'ef', 'ds@motw.net')
+        self.assertEqual('ds@motw.net', getattr(self.instance_with_fields, 'ef'))
+
+    def test_validate_phone_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'pf', 'not a phone number')  #
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'pf', '12345678900')  # not starting with 7
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'pf', '7123456789')  # not 11
+        setattr(self.instance_with_fields, 'pf', '71234567890')  # accepts strings
+        self.assertEqual('71234567890', getattr(self.instance_with_fields, 'pf'))
+        setattr(self.instance_with_fields, 'pf', 71234567890)  # accepts numbers
+        self.assertEqual(71234567890, getattr(self.instance_with_fields, 'pf'))
+
+    def test_validate_date_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'df', '11.11.11')  # not dd.mm.yyyy format
+        setattr(self.instance_with_fields, 'df', '11.11.2011')
+        self.assertEqual(datetime.date(2011, 11, 11), getattr(self.instance_with_fields, 'df'))
+
+    def test_validate_birthdate_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'bdf', '01.01.1900')  # age > 70
+        setattr(self.instance_with_fields, 'bdf', '11.11.2011')
+        self.assertEqual(datetime.date(2011, 11, 11), getattr(self.instance_with_fields, 'bdf'))
+
+    def test_validate_gender_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'gf', '2')  # NaN
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'gf', 11)  # not in the list
+        setattr(self.instance_with_fields, 'gf', 2)
+        self.assertEqual(2, getattr(self.instance_with_fields, 'gf'))
+
+    def test_validate_client_ids_type(self):
+        with self.assertRaises(TypeError):
+            setattr(self.instance_with_fields, 'cif', '[1, 2, 3]')  # not a list
+        setattr(self.instance_with_fields, 'cif', [1, 2, 3])
+        self.assertEqual([1, 2, 3], getattr(self.instance_with_fields, 'cif'))
+
+
 class TestSuite(unittest.TestCase):
     def setUp(self):
         # self.rs = RedisStorage()
@@ -34,13 +116,13 @@ class TestSuite(unittest.TestCase):
         # }
         # for k, v in client_interests_fixture.items():
         #     self.rs.rpush(k, v)
-        rs = Mock(spec=RedisStorage)
-        rs.get.return_value = json.dumps(['cars', 'pets'])
-        rs.cache_get.return_value = 3.0
+        # rs = Mock(spec=RedisStorage)
+        # rs.get.return_value = json.dumps(['cars', 'pets'])
+        # rs.cache_get.return_value = 3.0
         # rs.cache_set
         self.context = {}
         self.headers = {}
-        self.settings = rs
+        self.settings = store.RedisStorage()
 
     def tearDown(self) -> None:
         # self.rs.close_connection()

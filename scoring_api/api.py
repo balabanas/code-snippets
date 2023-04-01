@@ -105,7 +105,7 @@ class DateField(BaseField):
         self.validate_nullable(self, value)
         if value:
             try:
-                date = datetime.datetime.strptime(value, '%d.%m.%Y')
+                date = datetime.datetime.strptime(value, '%d.%m.%Y').date()
                 setattr(instance, self.name, date)
             except ValueError:
                 raise TypeError(f"Field {self.name[1:]} should be a str formatted as dd.mm.yyyy. Got: {value}")
@@ -117,7 +117,7 @@ class BirthDayField(DateField):
         super().__set__(instance, value)
         date = getattr(instance, self.name)  # value was already set by super method, take it
         if date:
-            age = datetime.datetime.today() - date
+            age = datetime.datetime.today().date() - date
             if age > datetime.timedelta(days=365 * 70):
                 raise TypeError(f"Field {self.name[1:]} should be < 70 years behind current date. Got: {date}")
 
@@ -317,12 +317,12 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     router = {
         "method": method_handler
     }
-    store = None
+    store = RedisStorage()
 
-    def __init__(self, request, client_address, server, store=None):
-        print('Print store: ', store)
-        self.store = store
-        super().__init__(request, client_address, server)
+    # def __init__(self, request, client_address, server):
+    #     print('Print store: ', store)
+    #     self.store = store
+    #     super().__init__(request, client_address, server)
 
     def get_request_id(self, headers):
         return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
@@ -369,15 +369,15 @@ if __name__ == "__main__":
     args: argparse.Namespace = parser.parse_args()
     logging.basicConfig(filename=args.log, level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
-    rs = RedisStorage()
+    # rs = RedisStorage()
     # server = HTTPServer(("localhost", args.port), MainHTTPHandler)
-    server = HTTPServer(("localhost", args.port), lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=rs))
+    server = HTTPServer(("localhost", args.port), MainHTTPHandler)  # , lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=rs)
     logging.info("Starting server at %s" % args.port)
     try:
-        rs.connect()
+        # rs.connect()
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        rs.close_connection()
-    server.server_close()
+        # rs.close_connection()
+        server.server_close()

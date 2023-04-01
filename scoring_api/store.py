@@ -5,16 +5,17 @@ from typing import Union
 
 
 class RedisStorage:
+    rs = None
     """Simple wrap to work with Redis without installing `redis` or alike libraries.
     Allows to set up connection, select database, put and get values and lists.
     The connection to the databas is established via socket.
     There are important defaults: localhost as host, 6379 as port and 0 as db index."""
-    def __init__(self, host='localhost', port=6379):
+    def __init__(self, host='localhost', port=6379, db_idx: int = 0):
         """Crates socket and initialise `host` and `port` attributes. Pass them to __init__ if need
         to override defaults."""
         self.host = host
         self.port = port
-        self.rs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.db_idx = db_idx
 
     def switch_db(self, db_num: int):
         """Activates the database to work with by index `db_num`"""
@@ -24,24 +25,27 @@ class RedisStorage:
         if not response == b'+OK\r\n':
             raise TypeError('Switching database failed!')
 
-    def connect(self, db_num: int = 0) -> None:  # let 0 be the prod
+    def connect(self) -> None:  # let 0 be the prod
         """Sets up connection to Redis and activates the db by index (default is 0)"""
         retry_count = 0
         max_retry_count = 3
         retry_interval = 1
         while True:
             try:
+                if self.rs:
+                    self.close_connection()
+                self.rs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.rs.settimeout(1)
                 self.rs.connect((self.host, self.port))
-                self.switch_db(db_num)
+                self.switch_db(self.db_idx)
                 break
-            except ConnectionRefusedError as e:
+            except TimeoutError as e:
                 retry_count += 1
                 if retry_count > max_retry_count:
                     print('Maximum connection retry count exceeded. Not connected to Redis.')
                     raise e
                 time.sleep(retry_interval * retry_count)
                 print(f"Connection to Redis failed. Retrying to connect... {retry_count}")
-
 
     def close_connection(self):
         """Closes the socket"""
@@ -67,42 +71,50 @@ class RedisStorage:
 
     def get(self, key: str) -> Union[str, None]:
         """Returns list value by key"""
+        self.connect()
         cli_cmd = f'LRANGE {key} 0 -1\r\n'
         self.rs.sendall(cli_cmd.encode('utf-8'))
         response = self.rs.recv(1024)
+        self.close_connection()
         response = self._parse_redis_response(response)
         # print('json dumps: ', json.dumps(response))
         return json.dumps(response)
 
     def cache_get(self, key: str) -> Union[str, None]:
         """Returns cached value by key"""
+        self.connect()
         cli_cmd = f'GET {key}\r\n'
         self.rs.sendall(cli_cmd.encode())
         response = self.rs.recv(1024)
+        self.close_connection()
         response = self._parse_redis_response(response)
         return response
 
     def cache_set(self, key: str, value: float, ex: int = 0) -> None:
         """Sets key-value pair with optional expire period"""
+        self.connect()
         self.rs.sendall(f'SET {key} {value} EX {ex}\r\n'.encode())
         response = self.rs.recv(1024)
+        self.close_connection()
         if not response == b'+OK\r\n':
             raise TypeError('Storing value has been failed!')
 
     def rpush(self, key: str, value: list) -> None:
         """Sets key-value pair, where value is a list."""
+        self.connect()
         cli_cmd = f'RPUSH {key} {" ".join(value)}\r\n'
         self.rs.sendall(cli_cmd.encode())
         response = self.rs.recv(1024)
+        self.close_connection()
         if not isinstance(int(response[1:-2]), int):
             raise TypeError('Storing value has been failed!')  # expects n of els in list
 
 
 if __name__ == "__main__":
     pass
-    # rs = RedisStorage()
+    rs = RedisStorage()
     # rs.connect()
-    # print(rs.get('ttt'))
-    # print(rs.cache_set('my', 345.0, 15))
-    # print(rs.cache_get('my'))
+    print(rs.get('ttt'))
+    print(rs.cache_set('my', 345.0, 15))
+    print(rs.cache_get('my'))
     # rs.close_connection()
