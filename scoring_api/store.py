@@ -1,5 +1,6 @@
 import json
 import socket
+import time
 from typing import Union
 
 
@@ -23,10 +24,24 @@ class RedisStorage:
         if not response == b'+OK\r\n':
             raise TypeError('Switching database failed!')
 
-    def connect(self, db_num: int = 0):  # let 0 be the prod
+    def connect(self, db_num: int = 0) -> None:  # let 0 be the prod
         """Sets up connection to Redis and activates the db by index (default is 0)"""
-        self.rs.connect((self.host, self.port))
-        self.switch_db(db_num)
+        retry_count = 0
+        max_retry_count = 3
+        retry_interval = 1
+        while True:
+            try:
+                self.rs.connect((self.host, self.port))
+                self.switch_db(db_num)
+                break
+            except ConnectionRefusedError as e:
+                retry_count += 1
+                if retry_count > max_retry_count:
+                    print('Maximum connection retry count exceeded. Not connected to Redis.')
+                    raise e
+                time.sleep(retry_interval * retry_count)
+                print(f"Connection to Redis failed. Retrying to connect... {retry_count}")
+
 
     def close_connection(self):
         """Closes the socket"""
