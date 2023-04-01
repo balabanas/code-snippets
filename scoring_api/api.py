@@ -362,7 +362,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         return
 
 
-if __name__ == "__main__":
+def main():
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument('-p', '--port', type=int, default=8080, help="Port to run the API on")
     parser.add_argument('-l', '--log', type=str, default='log.txt', help="Path to a log file")
@@ -371,7 +371,8 @@ if __name__ == "__main__":
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
     # rs = RedisStorage()
     # server = HTTPServer(("localhost", args.port), MainHTTPHandler)
-    server = HTTPServer(("localhost", args.port), MainHTTPHandler)  # , lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=rs)
+    server = HTTPServer(("localhost", args.port),
+                        MainHTTPHandler)  # , lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=rs)
     logging.info("Starting server at %s" % args.port)
     try:
         # rs.connect()
@@ -381,3 +382,7 @@ if __name__ == "__main__":
     finally:
         # rs.close_connection()
         server.server_close()
+
+
+if __name__ == "__main__":
+    main()
