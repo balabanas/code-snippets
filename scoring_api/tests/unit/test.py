@@ -106,16 +106,6 @@ class CharFieldTest(unittest.TestCase):
 
 class TestSuite(unittest.TestCase):
     def setUp(self):
-        # self.rs = RedisStorage()
-        # self.rs.connect()
-        # client_interests_fixture: dict = {
-        #     'i:0': ["cars", "pets"],
-        #     'i:1': ["sport", "geek"],
-        #     'i:2': ["hi-tech", "sport"],
-        #     'i:3': ["cars", "pets"],
-        # }
-        # for k, v in client_interests_fixture.items():
-        #     self.rs.rpush(k, v)
         # rs = Mock(spec=RedisStorage)
         # rs.get.return_value = json.dumps(['cars', 'pets'])
         # rs.cache_get.return_value = 3.0

@@ -32,8 +32,8 @@ class RedisStorage:
     def connect(self) -> None:  # let 0 be the prod
         """Sets up connection to Redis and activates the db by index (default is 0)"""
         retry_count = 0
-        max_retry_count = 3
-        retry_interval = 1
+        max_retry_count = 1
+        retry_interval = 0.5
         while True:
             try:
                 if self.rs:
@@ -96,7 +96,7 @@ class RedisStorage:
                 logging.error(msg)
                 raise TypeError(msg)
         except TimeoutError:  # cache is not available
-            logging.error("Cache is not available!")  # not a problem, just log it and go
+            logging.error("Timeout: cache is not ready to save to")  # not a problem, just log it and go
 
     def cache_get(self, key: str) -> Union[str, None]:
         """Returns cached value by key"""
@@ -108,7 +108,7 @@ class RedisStorage:
             self.close_connection()
             response = self._parse_redis_response(response)
         except TimeoutError:  # cache is not available
-            logging.error("Cache is not available!")  # not a problem, just log it and go
+            logging.error("Timeout: cache is not ready to read from")  # not a problem, just log it and go
             response = None  # not a problem, return None
         return response
 
@@ -126,10 +126,7 @@ class RedisStorage:
 
 
 if __name__ == "__main__":
-    pass
-    rs = RedisStorage()
-    # rs.connect()
-    print(rs.get('ttt'))
-    print(rs.cache_set('my', 345.0, 15))
-    print(rs.cache_get('my'))
-    # rs.close_connection()
+    store = RedisStorage()
+    print(store.get('ttt'))
+    print(store.cache_set('my', 345.0, 15))
+    print(store.cache_get('my'))
