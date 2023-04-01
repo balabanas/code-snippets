@@ -1,4 +1,5 @@
 import json
+import logging
 import socket
 import time
 from typing import Union
@@ -10,6 +11,7 @@ class RedisStorage:
     Allows to set up connection, select database, put and get values and lists.
     The connection to the databas is established via socket.
     There are important defaults: localhost as host, 6379 as port and 0 as db index."""
+
     def __init__(self, host='localhost', port=6379, db_idx: int = 0):
         """Crates socket and initialise `host` and `port` attributes. Pass them to __init__ if need
         to override defaults."""
@@ -23,7 +25,9 @@ class RedisStorage:
         self.rs.sendall(cli_cmd.encode('utf-8'))
         response = self.rs.recv(1024)
         if not response == b'+OK\r\n':
-            raise TypeError('Switching database failed!')
+            msg = 'Switching database failed!'
+            logging.error(msg)
+            raise TypeError(msg)
 
     def connect(self) -> None:  # let 0 be the prod
         """Sets up connection to Redis and activates the db by index (default is 0)"""
@@ -42,10 +46,10 @@ class RedisStorage:
             except TimeoutError as e:
                 retry_count += 1
                 if retry_count > max_retry_count:
-                    print('Maximum connection retry count exceeded. Not connected to Redis.')
+                    logging.error('Maximum connection retry count exceeded. Not connected to Redis.')
                     raise e
                 time.sleep(retry_interval * retry_count)
-                print(f"Connection to Redis failed. Retrying to connect... {retry_count}")
+                logging.info(f"Connection to Redis failed. Retrying to connect... {retry_count}")
 
     def close_connection(self):
         """Closes the socket"""
@@ -80,24 +84,33 @@ class RedisStorage:
         # print('json dumps: ', json.dumps(response))
         return json.dumps(response)
 
-    def cache_get(self, key: str) -> Union[str, None]:
-        """Returns cached value by key"""
-        self.connect()
-        cli_cmd = f'GET {key}\r\n'
-        self.rs.sendall(cli_cmd.encode())
-        response = self.rs.recv(1024)
-        self.close_connection()
-        response = self._parse_redis_response(response)
-        return response
-
     def cache_set(self, key: str, value: float, ex: int = 0) -> None:
         """Sets key-value pair with optional expire period"""
-        self.connect()
-        self.rs.sendall(f'SET {key} {value} EX {ex}\r\n'.encode())
-        response = self.rs.recv(1024)
-        self.close_connection()
-        if not response == b'+OK\r\n':
-            raise TypeError('Storing value has been failed!')
+        try:
+            self.connect()
+            self.rs.sendall(f'SET {key} {value} EX {ex}\r\n'.encode())
+            response = self.rs.recv(1024)
+            self.close_connection()
+            if not response == b'+OK\r\n':
+                msg = f"Caching value has been failed! Response: {response}"
+                logging.error(msg)
+                raise TypeError(msg)
+        except TimeoutError:  # cache is not available
+            logging.error("Cache is not available!")  # not a problem, just log it and go
+
+    def cache_get(self, key: str) -> Union[str, None]:
+        """Returns cached value by key"""
+        try:
+            self.connect()
+            cli_cmd = f'GET {key}\r\n'
+            self.rs.sendall(cli_cmd.encode())
+            response = self.rs.recv(1024)
+            self.close_connection()
+            response = self._parse_redis_response(response)
+        except TimeoutError:  # cache is not available
+            logging.error("Cache is not available!")  # not a problem, just log it and go
+            response = None  # not a problem, return None
+        return response
 
     def rpush(self, key: str, value: list) -> None:
         """Sets key-value pair, where value is a list."""
@@ -107,7 +120,9 @@ class RedisStorage:
         response = self.rs.recv(1024)
         self.close_connection()
         if not isinstance(int(response[1:-2]), int):
-            raise TypeError('Storing value has been failed!')  # expects n of els in list
+            msg = "Storing value has been failed!"
+            logging.error(msg)
+            raise TypeError(msg)  # expects n of els in list
 
 
 if __name__ == "__main__":
