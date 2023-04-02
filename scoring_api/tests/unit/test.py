@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 from scoring_api import api
 from scoring_api import store  # RedisStorage
-
+from scoring_api.tests import utils
 
 def cases(cases):
     def decorator(f):
@@ -121,15 +121,6 @@ class TestSuite(unittest.TestCase):
     def get_response(self, request):
         return api.method_handler({"body": request, "headers": self.headers}, self.context, self.settings)
 
-    @staticmethod
-    def set_valid_auth(request):
-        if request.get("login") == api.ADMIN_LOGIN:
-            msg = datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT
-            request["token"] = hashlib.sha512(msg.encode()).hexdigest()
-        else:
-            msg = request.get("account", "") + request.get("login", "") + api.SALT
-            request["token"] = hashlib.sha512(msg.encode()).hexdigest()
-
     def test_empty_request(self):
         _, code = self.get_response({})
         self.assertEqual(api.INVALID_REQUEST, code)
@@ -150,7 +141,7 @@ class TestSuite(unittest.TestCase):
         {"account": "horns&hoofs", "method": "online_score", "arguments": {}},
     ])
     def test_invalid_method_request(self, request):
-        self.set_valid_auth(request)
+        utils.set_valid_auth(request)
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
         self.assertTrue(len(response))
@@ -172,7 +163,7 @@ class TestSuite(unittest.TestCase):
     ])
     def test_invalid_score_request(self, arguments):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
-        self.set_valid_auth(request)
+        utils.set_valid_auth(request)
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code, arguments)
         self.assertTrue(len(response))
@@ -189,7 +180,7 @@ class TestSuite(unittest.TestCase):
     ])
     def test_ok_score_request(self, arguments):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
-        self.set_valid_auth(request)
+        utils.set_valid_auth(request)
         response, code = self.get_response(request)
         print(response)
         self.assertEqual(api.OK, code, arguments)
@@ -200,7 +191,7 @@ class TestSuite(unittest.TestCase):
     def test_ok_score_admin_request(self):
         arguments = {"phone": "79175002040", "email": "stupnikov@otus.ru"}
         request = {"account": "horns&hoofs", "login": "admin", "method": "online_score", "arguments": arguments}
-        self.set_valid_auth(request)
+        utils.set_valid_auth(request)
         response, code = self.get_response(request)
         self.assertEqual(api.OK, code)
         score = response.get("score")
@@ -217,7 +208,7 @@ class TestSuite(unittest.TestCase):
     ])
     def test_invalid_interests_request(self, arguments):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "clients_interests", "arguments": arguments}
-        self.set_valid_auth(request)
+        utils.set_valid_auth(request)
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code, arguments)
         self.assertTrue(len(response))
@@ -229,7 +220,7 @@ class TestSuite(unittest.TestCase):
     ])
     def test_ok_interests_request(self, arguments):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "clients_interests", "arguments": arguments}
-        self.set_valid_auth(request)
+        utils.set_valid_auth(request)
         response, code = self.get_response(request)
         self.assertEqual(api.OK, code, arguments)
         self.assertEqual(len(arguments["client_ids"]), len(response))

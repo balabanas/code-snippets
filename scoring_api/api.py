@@ -182,7 +182,7 @@ class BaseRequest(metaclass=CollectFieldsMeta):
                 try:
                     getattr(self, f'_{f}')
                 except AttributeError:
-                    raise TypeError(f"Field {f} is required!")
+                    raise TypeError(f"Field `{f}` is required!")
         return True
 
     def _digest_params(self, params: dict) -> None:
@@ -317,12 +317,12 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     router = {
         "method": method_handler
     }
-    store = RedisStorage()
+    store = None
 
-    # def __init__(self, request, client_address, server):
-    #     print('Print store: ', store)
-    #     self.store = store
-    #     super().__init__(request, client_address, server)
+    def __init__(self, request, client_address, server, store):
+        print('Print store: ', store)
+        self.store = store
+        super().__init__(request, client_address, server)
 
     def get_request_id(self, headers):
         return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
@@ -364,15 +364,20 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
 
 def main():
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument('--host', type=str, default='localhost', help="Port to run the API on")
     parser.add_argument('-p', '--port', type=int, default=8080, help="Port to run the API on")
     parser.add_argument('-l', '--log', type=str, default='log.txt', help="Path to a log file")
+    parser.add_argument('--redisdb', type=int, default=0, help="Redis DB index")
+    parser.add_argument('--redishost', type=str, default='localhost', help="Path to a log file")
+    parser.add_argument('--redisport', type=int, default=6379, help="Path to a log file")
     args: argparse.Namespace = parser.parse_args()
     logging.basicConfig(filename=args.log, level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
     # rs = RedisStorage()
     # server = HTTPServer(("localhost", args.port), MainHTTPHandler)
-    server = HTTPServer(("localhost", args.port),
-                        MainHTTPHandler)  # , lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=rs)
+    redis_store = RedisStorage(args.redishost, args.redisport, args.redisdb)
+    server = HTTPServer((args.host, args.port),
+                        lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=redis_store))
     logging.info("Starting server at %s" % args.port)
     try:
         # rs.connect()

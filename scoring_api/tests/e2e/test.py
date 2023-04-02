@@ -1,38 +1,47 @@
 import json
-import os
-import time
 import unittest
 
 import requests
-
-from scoring_api import api
-
+import subprocess
+from scoring_api.tests import utils
 
 class RequestResponseTest(unittest.TestCase):
     def setUp(self) -> None:
-        import subprocess
-        print('CWD: ', os.getcwd())
-        self.process = subprocess.Popen(['python', '../../api.py'])
+        redis_db_idx = 1
+        http_server_host = 'localhost'
+        http_server_port = 8080
+        self.request = {
+            "account": "testacc",
+            "login": "testlog",
+        }
+        utils.set_valid_auth(self.request)
+        self.url = f'http://{http_server_host}:{http_server_port}/method'
+        self.headers = {'Content-Type': 'application/json'}
+        self.process = subprocess.Popen(['python', '../../api.py', f'--redisdb={redis_db_idx}'])
 
     def tearDown(self) -> None:
         self.process.terminate()
 
-    def test_online_score_success(self):
-        url = 'http://localhost:8080/method'  # TODO: parametrize
-        headers = {'Content-Type': 'application/json'}
-        data = {"account": "testacc", "login": "testlog", "method": "online_score",  # TODO construct valid token
-                "token": "d0ffdbabce6b9ceb5f95127347a501c78d04592813ffbb4eae224ed18f838998e0ea214d382fab2a69712d433aab30259abd1f99734da71440dc270a99a5cbab",
-                "arguments": {"phone": 78888824088, "email": "test@mail.ent"}}
+    def test_ok_online_score(self):
+        self.request['method'] = 'online_score'
+        self.request['arguments'] = {"phone": 78888824088, "email": "test@mail.ent"}
+        response = requests.post(self.url, headers=self.headers, data=json.dumps(self.request))
+        self.assertEqual('{"response": {"score": 3.0}, "code": 200}', response.text)
 
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-        print(response.text)
+    def test_online_score_success_no_method(self):
+        self.request['arguments'] = {"phone": 78888824088, "email": "test@mail.ent"}
+        response = requests.post(self.url, headers=self.headers, data=json.dumps(self.request))
+        self.assertEqual('{"error": "Field `method` is required!", "code": 422}', response.text)
 
-    def test_online_clients_interests_success(self):
-        url = 'http://localhost:8080/method'  # TODO: parametrize
-        headers = {'Content-Type': 'application/json'}
-        data = {"account": "testacc", "login": "testlog", "method": "clients_interests",  # TODO construct valid token
-                "token": "d0ffdbabce6b9ceb5f95127347a501c78d04592813ffbb4eae224ed18f838998e0ea214d382fab2a69712d433aab30259abd1f99734da71440dc270a99a5cbab",
-                "arguments": {"client_ids": [1, 2, 10, 25], "date": "22.03.1996"}}
+    def test_ok_online_clients_interests(self):
+        self.request['method'] = 'clients_interests'
+        self.request['arguments'] = {"client_ids": [1, 2], "date": "22.03.1996"}
+        response = requests.post(self.url, headers=self.headers, data=json.dumps(self.request))
+        self.assertEqual('{"response": {"1": ["sport", "geek"], "2": ["hi-tech", "sport"]}, "code": 200}',
+                         response.text)
 
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-        print(response.text)
+    def test_online_clients_interests_bad_date(self):
+        self.request['method'] = 'clients_interests'
+        self.request['arguments'] = {"client_ids": [1, 2], "date": "221996"}
+        response = requests.post(self.url, headers=self.headers, data=json.dumps(self.request))
+        self.assertIn('Field date should be a str formatted', response.text)
