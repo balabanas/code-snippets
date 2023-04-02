@@ -12,4 +12,3 @@ def set_valid_auth(request):
     else:
         msg = request.get("account", "") + request.get("login", "") + api.SALT
         request["token"] = hashlib.sha512(msg.encode()).hexdigest()
-        print('TOKEN IN UTILS: ', request['token'])
