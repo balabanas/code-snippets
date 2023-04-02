@@ -1,8 +1,9 @@
 import json
-import logging
 import unittest
+
 from scoring_api import store
 
+"""Testing methods of RedisStorage"""
 """Tests require Redis instance up an running"""
 
 
@@ -20,7 +21,6 @@ class StoreTest(unittest.TestCase):
         for k, v in fixture_lists.items():
             self.store.rpush(k, v)
         self.store.close_connection()
-
 
     def tearDown(self) -> None:
         if self.store.rs:
