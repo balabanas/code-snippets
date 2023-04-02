@@ -22,7 +22,7 @@ class RequestResponseTest(unittest.TestCase):
         utils.set_valid_auth(self.request)
         self.url = f'http://{http_server_host}:{http_server_port}/method'
         self.headers = {'Content-Type': 'application/json'}
-        self.process = subprocess.Popen(['python', '../../api.py', f'--redisdb={redis_db_idx}'])
+        self.process = subprocess.Popen(['python', 'api.py', f'--redisdb={redis_db_idx}'])
 
     def tearDown(self) -> None:
         self.process.terminate()
