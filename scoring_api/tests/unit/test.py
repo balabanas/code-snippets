@@ -1,4 +1,3 @@
-import hashlib
 import datetime
 import functools
 import json
@@ -6,23 +5,23 @@ import unittest
 from unittest.mock import Mock
 
 from scoring_api import api
-from scoring_api import store  # RedisStorage
+from scoring_api import store
 from scoring_api.tests import utils
 
-def cases(cases):
+
+def cases(cases_list: list):
     def decorator(f):
         @functools.wraps(f)
         def wrapper(*args):
-            for c in cases:
+            for c in cases_list:
                 new_args = args + (c if isinstance(c, tuple) else (c,))
-                print(f)
-                print(new_args)
                 f(*new_args)
         return wrapper
     return decorator
 
 
 class CharFieldTest(unittest.TestCase):
+    """Tests for field descriptors. How validation works"""
     def setUp(self):
         class ClassWithFields:
             nf_chf = api.CharField(required=False, nullable=True)
@@ -105,14 +104,16 @@ class CharFieldTest(unittest.TestCase):
 
 
 class TestSuite(unittest.TestCase):
+    """Tests for Request classes"""
     def setUp(self):
-        # rs = Mock(spec=RedisStorage)
-        # rs.get.return_value = json.dumps(['cars', 'pets'])
-        # rs.cache_get.return_value = 3.0
-        # rs.cache_set
+        # Mocking store: Redis instance is not required
+        redis_storage = Mock(spec=store.RedisStorage)
+        redis_storage.get.return_value = json.dumps(['cars', 'pets'])
+        redis_storage.cache_get.return_value = 3.0
+
         self.context = {}
         self.headers = {}
-        self.settings = store.RedisStorage()
+        self.settings = redis_storage
 
     def tearDown(self) -> None:
         # self.rs.close_connection()
@@ -136,7 +137,8 @@ class TestSuite(unittest.TestCase):
 
     @cases([
         {"account": "horns&hoofs", "login": "h&f", "method": "online_score"},
-        {"account": "horns&hoofs", "login": "h&f", "method": None, "arguments": {"phone": "79175002040", "email": "stupnikovotus.ru"}},
+        {"account": "horns&hoofs", "login": "h&f", "method": None, "arguments":
+            {"phone": "79175002040", "email": "stupnikovotus.ru"}},
         {"account": "horns&hoofs", "login": "h&f", "arguments": {}},
         {"account": "horns&hoofs", "method": "online_score", "arguments": {}},
     ])
@@ -182,7 +184,6 @@ class TestSuite(unittest.TestCase):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
         utils.set_valid_auth(request)
         response, code = self.get_response(request)
-        print(response)
         self.assertEqual(api.OK, code, arguments)
         score = response.get("score")
         self.assertTrue(isinstance(score, (int, float)) and score >= 0, arguments)
