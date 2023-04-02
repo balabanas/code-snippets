@@ -40,10 +40,16 @@ class StoreTest(unittest.TestCase):
     def test_get_null(self):
         self.assertEqual(json.dumps(None), self.store.get('not_existing_key'))
 
-    def test_get_success(self):
+    def test_ok_get(self):
         self.assertEqual(json.dumps(["cars", "pets"]), self.store.get('i:3'))
 
-    def test_cache_set_sucsess(self):  # get success also tested here
+    def test_ok_fail(self):
+        """Tests fail when store unavailable"""
+        self.store.port = 6380
+        with self.assertRaises(TimeoutError):
+            self.store.get('i:3')
+
+    def test_ok_cache_set(self):  # get ok also tested here
         self.store.cache_set('test_key', 33, 60)
         self.assertEqual('33', self.store.cache_get('test_key'))
 
