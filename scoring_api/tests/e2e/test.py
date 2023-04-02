@@ -1,9 +1,14 @@
 import json
+import subprocess
 import unittest
 
 import requests
-import subprocess
+
 from scoring_api.tests import utils
+
+"""Run api.py in subprocess, make requests and evaluate responses"""
+"""Tests require Redis instance up an running"""
+
 
 class RequestResponseTest(unittest.TestCase):
     def setUp(self) -> None:
