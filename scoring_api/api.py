@@ -54,7 +54,9 @@ class BaseField:
     @staticmethod
     def validate_nullable(field, value):
         if not field.nullable and value is None:
-            raise TypeError(f"Field {field.name[1:]} is not nullable.")
+            msg = f"Field `{field.name[1:]}` is not nullable."
+            logging.error(msg)
+            raise TypeError(msg)
 
 
 class CharField(BaseField):
@@ -62,7 +64,9 @@ class CharField(BaseField):
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
         if not isinstance(value, (str, type(None))):
-            raise TypeError(f"If being set, field {self.name[1:]} expects string. Got: {type(value)}")
+            msg = f"If being set, field `{self.name[1:]}` expects string. Got: {type(value)}"
+            logging.error(msg)
+            raise TypeError(msg)
         setattr(instance, self.name, value)
 
 
@@ -71,7 +75,9 @@ class ArgumentsField(BaseField):
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
         if not isinstance(value, (dict, type(None))):
-            raise TypeError(f"If being set, field {self.name[1:]} expects to be dict. Got: {type(value)}")
+            msg = f"If being set, field `{self.name[1:]}` expects to be dict. Got: {type(value)}"
+            logging.error(msg)
+            raise TypeError(msg)
         setattr(instance, self.name, value)
 
 
@@ -82,7 +88,9 @@ class EmailField(CharField):
         if value:
             pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if re.match(pattern, value) is None:
-                raise TypeError(f"Field {self.name[1:]} dose not meet e-mail format")
+                msg = f"Field `{self.name[1:]}` dose not meet e-mail format"
+                logging.error(msg)
+                raise TypeError(msg)
 
 
 class PhoneField(BaseField):
@@ -91,11 +99,13 @@ class PhoneField(BaseField):
         self.validate_nullable(self, value)
         if value:
             if str(value)[0] != '7':
-                raise TypeError(
-                    f"Field {self.name[1:]} should start with 7")
+                msg = f"Field `{self.name[1:]}` should start with 7"
+                logging.error(msg)
+                raise TypeError(msg)
             if len(str(value)) != 11:
-                raise TypeError(
-                    f"Field {self.name[1:]} should have exactly 11 digits")
+                msg = f"Field `{self.name[1:]}` should have exactly 11 digits"
+                logging.error(msg)
+                raise TypeError(msg)
         setattr(instance, self.name, value)
 
 
@@ -108,7 +118,9 @@ class DateField(BaseField):
                 date = datetime.datetime.strptime(value, '%d.%m.%Y').date()
                 setattr(instance, self.name, date)
             except ValueError:
-                raise TypeError(f"Field {self.name[1:]} should be a str formatted as dd.mm.yyyy. Got: {value}")
+                msg = f"Field `{self.name[1:]}` should be a str formatted as dd.mm.yyyy. Got: {value}"
+                logging.error(msg)
+                raise TypeError(msg)
 
 
 class BirthDayField(DateField):
@@ -119,7 +131,9 @@ class BirthDayField(DateField):
         if date:
             age = datetime.datetime.today().date() - date
             if age > datetime.timedelta(days=365 * 70):
-                raise TypeError(f"Field {self.name[1:]} should be < 70 years behind current date. Got: {date}")
+                msg = f"Field `{self.name[1:]}` should be < 70 years behind current date. Got: {date}"
+                logging.error(msg)
+                raise TypeError(msg)
 
 
 class GenderField(BaseField):
@@ -127,9 +141,13 @@ class GenderField(BaseField):
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
         if not isinstance(value, (int, float, type(None))):
-            raise TypeError(f"If being set, {self.name[1:]} should be a number")
+            msg = f"If being set, `{self.name[1:]}` should be a number"
+            logging.error(msg)
+            raise TypeError(msg)
         if value and value not in [0, 1, 2]:
-            raise TypeError(f"If being set, {self.name[1:]} expects one of {{0, 1, 2}}. Got: {value}")
+            msg = f"If being set, `{self.name[1:]}` expects one of {{0, 1, 2}}. Got: {value}"
+            logging.error(msg)
+            raise TypeError(msg)
         setattr(instance, self.name, value)
 
 
@@ -138,14 +156,20 @@ class ClientIDsField(BaseField):
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
         if not isinstance(value, (list, type(None))):
-            raise TypeError(f"If being set, {self.name[1:]} expects list. Got: {type(value)}")
+            msg = f"If being set, `{self.name[1:]}` expects list. Got: {type(value)}"
+            logging.error(msg)
+            raise TypeError(msg)
         elif isinstance(value, list):
             if len(value) == 0:
-                raise TypeError(f"Field {self.name[1:]} expects non-empty list. Got: {value}")
+                msg = f"Field `{self.name[1:]}` expects non-empty list. Got: {value}"
+                logging.error(msg)
+                raise TypeError(msg)
         if value:
             for el in value:
                 if not isinstance(el, (int, float)):
-                    raise TypeError(f"Field {self.name[1:]} expects numbers in a list. Got: {type(el)}")
+                    msg = f"Field `{self.name[1:]}` expects numbers in a list. Got: {type(el)}"
+                    logging.error(msg)
+                    raise TypeError(msg)
         setattr(instance, self.name, value)
 
 
@@ -182,7 +206,9 @@ class BaseRequest(metaclass=CollectFieldsMeta):
                 try:
                     getattr(self, f'_{f}')
                 except AttributeError:
-                    raise TypeError(f"Field `{f}` is required!")
+                    msg = f"Field `{f}` is required!"
+                    logging.error(msg)
+                    raise TypeError(msg)
         return True
 
     def _digest_params(self, params: dict) -> None:
@@ -204,12 +230,15 @@ class ClientsInterestsRequest(BaseRequest):
     date = DateField(required=False, nullable=True)
 
     def process_request(self):
+        logging.info("Start processing clients-interest request")
         try:
             self._digest_params(self.params)
             self.ctx['nclients'] = len(self.client_ids)
             self.response, self.code = {f'{i}': get_interests(self.store, i) for i in self.client_ids}, OK
         except TypeError as e:
+            logging.error("Failed processing clients-interests request!")
             self.response, self.code = e.args[0], INVALID_REQUEST
+        logging.info("Finish processing clients-interests request")
         return self.response, self.code
 
 
@@ -225,6 +254,7 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
 
     def process_request(self):
         try:
+            logging.info("Start processing online-score request")
             self._digest_params(self.params)
 
             # Some specific pairs of parameters in request should be defined for correct scoring.
@@ -234,7 +264,9 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
             if not (all(f'_{f}' in self.__dict__ for f in ('phone', 'email'))
                     or all(f'_{f}' in self.__dict__ for f in ('first_name', 'last_name'))
                     or all(f'_{f}' in self.__dict__ for f in ('gender', 'birthday'))):
-                raise TypeError("No valid pair of arguments found")
+                msg = "No valid pair of arguments found"
+                logging.error(msg)
+                raise TypeError(msg)
 
             request_fields_vals = {f: getattr(self, f) if f'_{f}' in self.__dict__ else None for f in
                                    self.request_fields}
@@ -242,7 +274,9 @@ class OnlineScoreRequest(BaseRequest, metaclass=CollectFieldsMeta):
             self.ctx['has'] = [f for f in self.request_fields if f'_{f}' in self.__dict__]
             self.response, self.code = {'score': score}, OK
         except TypeError as e:
+            logging.error("Failed processing online-score request!")
             self.response, self.code = e.args[0], INVALID_REQUEST
+        logging.info("Finish processing online-score request")
         return self.response, self.code
 
 
@@ -271,6 +305,7 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
 
     @property
     def is_admin(self):
+        logging.info("Got request from admin")
         return self.login == ADMIN_LOGIN
 
     def check_auth(self):
@@ -281,7 +316,9 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
             msg = self.account + self.login + SALT
             digest = hashlib.sha512(msg.encode()).hexdigest()
         if digest == self.token:
+            logging.info("Request is authorized")
             return True
+        logging.info("Request is not authorized")
         return False
 
     def process_request(self):
@@ -296,7 +333,6 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
                 return self.response, self.code  # auth failed
 
             backend_args = {'arguments': self.arguments, 'ctx': self.ctx, 'store': self.store}
-            print('self.store', self.store)
             mb = MethodFactory().get_method_backend(self.method, backend_args)
             self.response, self.code = mb.process_request()
 
@@ -306,10 +342,11 @@ class MethodRequest(BaseRequest, metaclass=CollectFieldsMeta):
 
 
 def method_handler(request, ctx, store):
-    print('store in method handler: ', store)
+    logging.info("Start processing request")
     params = request['body']
     r = MethodRequest(params, ctx, store)
     response, code = r.process_request()
+    logging.info("Finish processing request")
     return response, code
 
 
@@ -320,7 +357,6 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     store = None
 
     def __init__(self, request, client_address, server, store):
-        print('Print store: ', store)
         self.store = store
         super().__init__(request, client_address, server)
 
@@ -366,26 +402,23 @@ def main():
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, default='localhost', help="Port to run the API on")
     parser.add_argument('-p', '--port', type=int, default=8080, help="Port to run the API on")
-    parser.add_argument('-l', '--log', type=str, default='log.txt', help="Path to a log file")
+    parser.add_argument('-l', '--log', type=str, default='scoring_api/log.txt', help="Path to a log file")
     parser.add_argument('--redisdb', type=int, default=0, help="Redis DB index")
     parser.add_argument('--redishost', type=str, default='localhost', help="Path to a log file")
     parser.add_argument('--redisport', type=int, default=6379, help="Path to a log file")
     args: argparse.Namespace = parser.parse_args()
     logging.basicConfig(filename=args.log, level=logging.INFO,
                         format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
-    # rs = RedisStorage()
-    # server = HTTPServer(("localhost", args.port), MainHTTPHandler)
     redis_store = RedisStorage(args.redishost, args.redisport, args.redisdb)
     server = HTTPServer((args.host, args.port),
                         lambda *args, **kwargs: MainHTTPHandler(*args, **kwargs, store=redis_store))
     logging.info("Starting server at %s" % args.port)
     try:
-        # rs.connect()
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        # rs.close_connection()
+        logging.info("Stopping server")
         server.server_close()
 
 

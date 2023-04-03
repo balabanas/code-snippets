@@ -1,13 +1,9 @@
 # Scoring API
 
-TODO: test that cache is actually used if exists
-TODO: implement curl request via requests for E2E testing
-TODO: errors on connection to Redis - to logging
+This is a demo of a simple scoring API. The method of scoring and arguments for it are passed in the request's body. The focus of the demo is not on API itself, but rather on request's parameters validation using classes.
 
-Who is listening 8080 port?
-netstat -ano | findstr :8080
-
-This is a demo of a simple scoring API. The method of scoring and arguments for them are passed in the request's body. The focus of the demo is not on API itself, but rather on request's parameters validation using classes.
+Redis instance is used to get and cache values for scoring methods. Cache methods are fault-tolerant, but .get method uses Redis as a persistence storage.
+We assume that #0 database is production, #1 is for tests.
 
 For demo purposes, parameters are passed as JSON dictionary inside  POST request.
 
@@ -17,6 +13,9 @@ For demo purposes, parameters are passed as JSON dictionary inside  POST request
 * Class inheritance
 * Factories
 * HTTPServer, POST requests, checking tokens
+* Redis integration
+* logging
+* Tests: unit, integration, end-to-end
 
 ## Request Structure
 * `account` - string, optional can be empty
@@ -69,6 +68,13 @@ Result:
 * As well, it adds `nclients` variable to context, with a number of ids in `client_ids`.
 
 ## Usage
+### Run Redis
+* `docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest`
+
+You may enter redis-cli and input some data if you like:
+* `docker exec -it redis-stack-server redis-cli`
+* `SET mykey myvalue`, etc.
+
 ### Run API and Invoke Requests
 1. Either:
    1. Run main() from your Python IDE. This starts simple Python http.server, or
@@ -84,9 +90,13 @@ Result:
 ... and use it as a `token` parameter with `login` = `admin`.
 
 ###Run Tests
-* Make sure your currend dir is one level up of `scoring_api` dir, and run `python -m scoring_api.test`
+Unit, integration and end-to-end (e2e) tests are available.
+For tests from /unit Redis instance is not required, it is mocked. For tests from /integration and /e2e running Redis isntance is required.
+
+To run all tests start Redis on `localhost` and port 6379. Tests are operated on DB with index 1.
+
+Then run:
+* Make sure your currend dir is one level up of `scoring_api` dir, and run `python -m unittest`
 
 
-+REDIS
-docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
-docker exec -it redis-stack-server redis-cli
+

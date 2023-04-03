@@ -75,14 +75,17 @@ class RedisStorage:
 
     def get(self, key: str) -> Union[str, None]:
         """Returns list value by key"""
-        self.connect()
-        cli_cmd = f'LRANGE {key} 0 -1\r\n'
-        self.rs.sendall(cli_cmd.encode('utf-8'))
-        response = self.rs.recv(1024)
-        self.close_connection()
-        response = self._parse_redis_response(response)
-        # print('json dumps: ', json.dumps(response))
-        return json.dumps(response)
+        try:
+            self.connect()
+            cli_cmd = f'LRANGE {key} 0 -1\r\n'
+            self.rs.sendall(cli_cmd.encode('utf-8'))
+            response = self.rs.recv(1024)
+            self.close_connection()
+            response = self._parse_redis_response(response)
+            return json.dumps(response)
+        except TimeoutError:
+            logging.error("Store unavailable! Return nothing!")
+            return None
 
     def cache_set(self, key: str, value: float, ex: int = 0) -> None:
         """Sets key-value pair with optional expire period"""
@@ -114,15 +117,19 @@ class RedisStorage:
 
     def rpush(self, key: str, value: list) -> None:
         """Sets key-value pair, where value is a list."""
-        self.connect()
-        cli_cmd = f'RPUSH {key} {" ".join(value)}\r\n'
-        self.rs.sendall(cli_cmd.encode())
-        response = self.rs.recv(1024)
-        self.close_connection()
-        if not isinstance(int(response[1:-2]), int):
-            msg = "Storing value has been failed!"
+        """"Assumes that .connect() is made before. Excepts the connection to be closed after function call"""
+        try:
+            cli_cmd = f'RPUSH {key} {" ".join(value)}\r\n'
+            self.rs.sendall(cli_cmd.encode())
+            response = self.rs.recv(1024)
+            if not isinstance(int(response[1:-2]), int):
+                msg = "Storing value has been failed!"
+                logging.error(msg)
+                raise TypeError(msg)  # expects n of els in list
+        except TimeoutError:
+            msg = "Timeout: unable to store with RPUSH"
             logging.error(msg)
-            raise TypeError(msg)  # expects n of els in list
+            raise TimeoutError(msg)
 
 
 if __name__ == "__main__":

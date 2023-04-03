@@ -12,6 +12,7 @@ class StoreTest(unittest.TestCase):
         self.store = store.RedisStorage(db_idx=1)
         self.store.connect()
         self.store.rs.sendall('FLUSHDB\r\n'.encode())
+        self.store.rs.recv(1024)  # clear buffer
         fixture_lists: dict = {
             'i:0': ["cars", "pets"],
             'i:1': ["sport", "geek"],
@@ -46,8 +47,7 @@ class StoreTest(unittest.TestCase):
     def test_ok_fail(self):
         """Tests fail when store unavailable"""
         self.store.port = 6380
-        with self.assertRaises(TimeoutError):
-            self.store.get('i:3')
+        self.assertEqual(None, self.store.get('i:3'))
 
     def test_ok_cache_set(self):  # get ok also tested here
         self.store.cache_set('test_key', 33, 60)

@@ -1,21 +1,10 @@
 import hashlib
 import json
-import random
+import logging
 
 
-# def get_score(store, phone, email, birthday=None, gender=None, first_name=None, last_name=None):
-#     score = 0
-#     if phone:
-#         score += 1.5
-#     if email:
-#         score += 1.5
-#     if birthday and gender:
-#         score += 1.5
-#     if first_name and last_name:
-#         score += 0.5
-#     return score
 def get_score(store, phone, email, birthday=None, gender=None, first_name=None, last_name=None):
-    print('store', store)
+    """Uses store as cache if available. If not - still works"""
     key_parts = [
         first_name or "",
         last_name or "",
@@ -24,11 +13,11 @@ def get_score(store, phone, email, birthday=None, gender=None, first_name=None, 
     ]
     encoded_join_key_parts = "".join(map(str, key_parts)).encode('utf-8')
     key = "uid:" + hashlib.md5(encoded_join_key_parts).hexdigest()
-    # try get from cache,
-    # fallback to heavy calculation in case of cache miss
+    # try get from cache, fallback to heavy calculation in case of cache miss
     score = store.cache_get(key) or 0
     if score:
         return float(score)
+    logging.info("get_score: Unable to find cached value, fallback to heavy calculations")
     if phone:
         score += 1.5
     if email:
@@ -41,11 +30,8 @@ def get_score(store, phone, email, birthday=None, gender=None, first_name=None, 
     store.cache_set(key, score, 60 * 60)
     return score
 
-# def get_interests(store, cid):
-#     interests = ["cars", "pets", "travel", "hi-tech", "sport", "music", "books", "tv", "cinema", "geek", "otus"]
-#     return random.sample(interests, 2)
+
 def get_interests(store, cid):
-    print('request to redis: ', "i:%s" % cid)
+    """Heavily rely on store (function .get will return TimeoutError if cache is not available)"""
     r = store.get("i:%s" % cid)
-    print('got from store.get: ', r)
     return json.loads(r) if r else []
