@@ -198,3 +198,4 @@ fabric.properties
 /.idea/vcs.xml
 /scoring_api/log.txt
 /mylog.txt
+/scoring_api/tests/e2e/log.txt
