@@ -44,12 +44,12 @@ class RequestResponseTest(unittest.TestCase):
 
     def test_ok_online_score(self):
         self.request['method'] = 'online_score'
-        self.request['arguments'] = {"phone": 78888824088, "email": "test@mail.ent"}
+        self.request['arguments'] = {"phone": 18888824088, "email": "test@mail.com"}
         response = requests.post(self.url, headers=self.headers, data=json.dumps(self.request))
         self.assertEqual('{"response": {"score": 3.0}, "code": 200}', response.text)
 
     def test_online_score_success_no_method(self):
-        self.request['arguments'] = {"phone": 78888824088, "email": "test@mail.ent"}
+        self.request['arguments'] = {"phone": 18888824088, "email": "test@mail.com"}
         response = requests.post(self.url, headers=self.headers, data=json.dumps(self.request))
         self.assertEqual('{"error": "Field `method` is required!", "code": 422}', response.text)
 

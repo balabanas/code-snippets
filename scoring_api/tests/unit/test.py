@@ -68,13 +68,13 @@ class CharFieldTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             setattr(self.instance_with_fields, 'pf', 'not a phone number')  #
         with self.assertRaises(TypeError):
-            setattr(self.instance_with_fields, 'pf', '12345678900')  # not starting with 7
+            setattr(self.instance_with_fields, 'pf', '82345678900')  # not starting with 1
         with self.assertRaises(TypeError):
-            setattr(self.instance_with_fields, 'pf', '7123456789')  # not 11
-        setattr(self.instance_with_fields, 'pf', '71234567890')  # accepts strings
-        self.assertEqual('71234567890', getattr(self.instance_with_fields, 'pf'))
-        setattr(self.instance_with_fields, 'pf', 71234567890)  # accepts numbers
-        self.assertEqual(71234567890, getattr(self.instance_with_fields, 'pf'))
+            setattr(self.instance_with_fields, 'pf', '1123456789')  # not 11
+        setattr(self.instance_with_fields, 'pf', '11234567890')  # accepts strings
+        self.assertEqual('11234567890', getattr(self.instance_with_fields, 'pf'))
+        setattr(self.instance_with_fields, 'pf', 11234567890)  # accepts numbers
+        self.assertEqual(11234567890, getattr(self.instance_with_fields, 'pf'))
 
     def test_validate_date_type(self):
         with self.assertRaises(TypeError):
@@ -138,7 +138,7 @@ class TestSuite(unittest.TestCase):
     @cases([
         {"account": "horns&hoofs", "login": "h&f", "method": "online_score"},
         {"account": "horns&hoofs", "login": "h&f", "method": None, "arguments":
-            {"phone": "79175002040", "email": "stupnikovotus.ru"}},
+            {"phone": "19175002040", "email": "testmail.com"}},
         {"account": "horns&hoofs", "login": "h&f", "arguments": {}},
         {"account": "horns&hoofs", "method": "online_score", "arguments": {}},
     ])
@@ -150,18 +150,18 @@ class TestSuite(unittest.TestCase):
 
     @cases([
         {},
-        {"phone": "79175002040"},
-        {"phone": "89175002040", "email": "stupnikov@otus.ru"},
-        {"phone": "79175002040", "email": "stupnikovotus.ru"},
-        {"phone": "79175002040", "email": "stupnikov@otus.ru", "gender": -1},
-        {"phone": "79175002040", "email": "stupnikov@otus.ru", "gender": "1"},
-        {"phone": "79175002040", "email": "stupnikov@otus.ru", "gender": 1, "birthday": "01.01.1890"},
-        {"phone": "79175002040", "email": "stupnikov@otus.ru", "gender": 1, "birthday": "XXX"},
-        {"phone": "79175002040", "email": "stupnikov@otus.ru", "gender": 1, "birthday": "01.01.2000", "first_name": 1},
-        {"phone": "79175002040", "email": "stupnikov@otus.ru", "gender": 1, "birthday": "01.01.2000",
+        {"phone": "19175002040"},
+        {"phone": "89175002040", "email": "test@mail.com"},
+        {"phone": "19175002040", "email": "testmail.com"},
+        {"phone": "19175002040", "email": "test@mail.com", "gender": -1},
+        {"phone": "19175002040", "email": "test@mail.com", "gender": "1"},
+        {"phone": "19175002040", "email": "test@mail.com", "gender": 1, "birthday": "01.01.1890"},
+        {"phone": "19175002040", "email": "test@mail.com", "gender": 1, "birthday": "XXX"},
+        {"phone": "19175002040", "email": "test@mail.com", "gender": 1, "birthday": "01.01.2000", "first_name": 1},
+        {"phone": "19175002040", "email": "test@mail.com", "gender": 1, "birthday": "01.01.2000",
          "first_name": "s", "last_name": 2},
-        {"phone": "79175002040", "birthday": "01.01.2000", "first_name": "s"},
-        {"email": "stupnikov@otus.ru", "gender": 1, "last_name": 2},
+        {"phone": "19175002040", "birthday": "01.01.2000", "first_name": "s"},
+        {"email": "test@mail.com", "gender": 1, "last_name": 2},
     ])
     def test_invalid_score_request(self, arguments):
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
@@ -171,13 +171,13 @@ class TestSuite(unittest.TestCase):
         self.assertTrue(len(response))
 
     @cases([
-        {"phone": "79175002040", "email": "stupnikov@otus.ru"},
-        {"phone": 79175002040, "email": "stupnikov@otus.ru"},
+        {"phone": "19175002040", "email": "test@mail.com"},
+        {"phone": 19175002040, "email": "test@mail.com"},
         {"gender": 1, "birthday": "01.01.2000", "first_name": "a", "last_name": "b"},
         {"gender": 0, "birthday": "01.01.2000"},
         {"gender": 2, "birthday": "01.01.2000"},
         {"first_name": "a", "last_name": "b"},
-        {"phone": "79175002040", "email": "stupnikov@otus.ru", "gender": 1, "birthday": "01.01.2000",
+        {"phone": "19175002040", "email": "test@mail.com", "gender": 1, "birthday": "01.01.2000",
          "first_name": "a", "last_name": "b"},
     ])
     def test_ok_score_request(self, arguments):
@@ -190,7 +190,7 @@ class TestSuite(unittest.TestCase):
         self.assertEqual(sorted(self.context["has"]), sorted(arguments.keys()))
 
     def test_ok_score_admin_request(self):
-        arguments = {"phone": "79175002040", "email": "stupnikov@otus.ru"}
+        arguments = {"phone": "19175002040", "email": "test@mail.com"}
         request = {"account": "horns&hoofs", "login": "admin", "method": "online_score", "arguments": arguments}
         utils.set_valid_auth(request)
         response, code = self.get_response(request)

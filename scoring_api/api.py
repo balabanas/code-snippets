@@ -98,8 +98,8 @@ class PhoneField(BaseField):
     def __set__(self, instance, value):
         self.validate_nullable(self, value)
         if value:
-            if str(value)[0] != '7':
-                msg = f"Field `{self.name[1:]}` should start with 7"
+            if str(value)[0] != '1':
+                msg = f"Field `{self.name[1:]}` should start with 1"
                 logging.error(msg)
                 raise TypeError(msg)
             if len(str(value)) != 11:
